@@ -1,0 +1,18 @@
+{
+  "apps": {
+    "standard": {
+      "name": "Coastdown MDA Standard",
+      "repo_url": "https://github.com/FelipeEckert/coastdown-mda-standard.git",
+      "branch": "release",
+      "local_path": "%USERPROFILE%\\CoastdownMDA\\standard\\coastdown-mda-standard",
+      "entrypoint": "app.py"
+    },
+    "split": {
+      "name": "Coastdown MDA Split",
+      "repo_url": "https://github.com/FelipeEckert/coastdown-mda-split.git",
+      "branch": "release",
+      "local_path": "%USERPROFILE%\\CoastdownMDA\\split\\coastdown-mda-split",
+      "entrypoint": "app.py"
+    }
+  }
+}
