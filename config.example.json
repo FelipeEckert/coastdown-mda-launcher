@@ -6,7 +6,8 @@
       "branch": "release",
       "local_path": "%USERPROFILE%\\CoastdownMDA\\standard\\cd-streamlit",
       "entrypoint": "app.py",
-      "venv_names": ["venv", ".venv"]
+      "venv_names": ["venv", ".venv"],
+      "port": 8501
     },
     "split": {
       "name": "Coastdown MDA Split",
@@ -14,7 +15,8 @@
       "branch": "release",
       "local_path": "%USERPROFILE%\\CoastdownMDA\\split\\coastdown-mda-split",
       "entrypoint": "app.py",
-      "venv_names": [".venv", "venv"]
+      "venv_names": [".venv", "venv"],
+      "port": 8502
     }
   }
 }

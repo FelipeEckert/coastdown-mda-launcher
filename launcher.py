@@ -5,6 +5,10 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+import time
+import urllib.error
+import urllib.request
+import webbrowser
 from pathlib import Path
 from tkinter import messagebox
 from tkinter import scrolledtext
@@ -235,6 +239,13 @@ class CoastdownLauncher(tk.Tk):
     def get_app_path(self, app_config):
         return Path(os.path.expandvars(app_config.get("local_path", "")))
 
+    def get_app_port(self, app_config):
+        try:
+            return int(app_config.get("port", 8501))
+        except (TypeError, ValueError):
+            self.enqueue_log("Porta invalida na configuracao. Usando porta padrao 8501.")
+            return 8501
+
     def ask_yes_no(self, title, message):
         if threading.current_thread() is threading.main_thread():
             return messagebox.askyesno(title, message, parent=self)
@@ -326,6 +337,65 @@ class CoastdownLauncher(tk.Tk):
             app_path,
         )
         return return_code == 0
+
+    def wait_for_localhost(self, url: str, timeout_seconds: int = 15) -> bool:
+        self.enqueue_log(f"Aguardando {url}...")
+        deadline = time.monotonic() + timeout_seconds
+
+        while time.monotonic() < deadline:
+            try:
+                with urllib.request.urlopen(url, timeout=1):
+                    return True
+            except urllib.error.HTTPError:
+                return True
+            except (OSError, urllib.error.URLError, TimeoutError):
+                time.sleep(0.5)
+
+        self.enqueue_log(
+            f"Aviso: {url} nao respondeu em {timeout_seconds} segundos. Abrindo mesmo assim."
+        )
+        return False
+
+    def find_browser_executable(self, paths):
+        for browser_path in paths:
+            expanded_path = Path(os.path.expandvars(browser_path))
+            if expanded_path.exists():
+                return expanded_path
+
+        return None
+
+    def open_browser_app_window(self, url: str) -> None:
+        edge_paths = [
+            r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe",
+            r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe",
+            r"%LOCALAPPDATA%\Microsoft\Edge\Application\msedge.exe",
+        ]
+        chrome_paths = [
+            r"%ProgramFiles%\Google\Chrome\Application\chrome.exe",
+            r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe",
+            r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe",
+        ]
+
+        edge_path = self.find_browser_executable(edge_paths)
+        if edge_path is not None:
+            self.enqueue_log("Abrindo em modo app: Microsoft Edge")
+            try:
+                subprocess.Popen([str(edge_path), f"--app={url}"])
+                return
+            except OSError as error:
+                self.enqueue_log(f"Falha ao abrir Microsoft Edge: {error}")
+
+        chrome_path = self.find_browser_executable(chrome_paths)
+        if chrome_path is not None:
+            self.enqueue_log("Abrindo em modo app: Google Chrome")
+            try:
+                subprocess.Popen([str(chrome_path), f"--app={url}"])
+                return
+            except OSError as error:
+                self.enqueue_log(f"Falha ao abrir Google Chrome: {error}")
+
+        self.enqueue_log("Edge/Chrome nao encontrado. Abrindo no navegador padrao.")
+        webbrowser.open(url)
 
     def prepare_app_environment(self, app_path: Path, app_config: dict) -> Path | None:
         app_name = app_config.get("name", "sem nome")
@@ -457,7 +527,20 @@ class CoastdownLauncher(tk.Tk):
                 self.enqueue_log("Streamlit ainda nao foi encontrado apos instalar dependencias.")
                 return
 
-        command = [str(venv_python), "-m", "streamlit", "run", entrypoint]
+        port = self.get_app_port(app_config)
+        url = f"http://localhost:{port}"
+        command = [
+            str(venv_python),
+            "-m",
+            "streamlit",
+            "run",
+            entrypoint,
+            "--server.port",
+            str(port),
+            "--server.headless",
+            "true",
+        ]
+        self.enqueue_log(f"Iniciando Streamlit na porta {port}...")
         self.enqueue_log(f"$ {subprocess.list2cmdline(command)}")
 
         try:
@@ -481,6 +564,8 @@ class CoastdownLauncher(tk.Tk):
             daemon=True,
         )
         output_thread.start()
+        self.wait_for_localhost(url)
+        self.open_browser_app_window(url)
 
     def read_process_output(self, process):
         if process.stdout is None:

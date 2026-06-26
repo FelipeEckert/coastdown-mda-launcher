@@ -27,12 +27,35 @@ Para personalizar caminhos locais, crie um arquivo `config.json` na raiz do proj
 
 Se `config.json` nao existir, o launcher usa `config.example.json` temporariamente e mostra um aviso.
 
+Cada app pode definir sua propria porta pelo campo `port` no `config.json`. Se o campo nao existir, o launcher usa a porta padrao `8501`.
+
+Exemplo:
+
+```json
+{
+  "apps": {
+    "standard": {
+      "port": 8501
+    },
+    "split": {
+      "port": 8502
+    }
+  }
+}
+```
+
+O launcher passa a porta diretamente para o Streamlit pela linha de comando. Nao e necessario alterar `.streamlit/config.toml` nos repositorios dos apps.
+
 ## O que o launcher faz
 
 - Verifica atualizacoes com Git.
 - Atualiza repositorios locais com `git pull --ff-only`.
-- Instala dependencias com `pip install -r requirements.txt` quando existe `.venv` e `requirements.txt`.
-- Abre o app com `python -m streamlit run app.py` usando o Python do ambiente virtual do app.
+- Detecta ambientes virtuais `venv` e `.venv`.
+- Cria `.venv` e instala `requirements.txt` com confirmacao do usuario quando necessario.
+- Valida se o Streamlit esta disponivel antes de abrir o app.
+- Abre o app com `python -m streamlit run app.py --server.port <porta> --server.headless true` usando o Python do ambiente virtual do app.
+- Tenta abrir Microsoft Edge ou Google Chrome em modo app, sem abas e sem barra de endereco.
+- Usa o navegador padrao como fallback quando Edge/Chrome nao sao encontrados.
 
 ## Restricoes
 
