@@ -2,7 +2,7 @@
   "apps": {
     "standard": {
       "name": "Coastdown MDA Standard",
-      "repo_url": "https://github.com/FelipeEckert/coastdown-mda-standard.git",
+      "repo_url": "https://github.com/FelipeEckert/cd-streamlit.git",
       "branch": "release",
       "local_path": "%USERPROFILE%\\CoastdownMDA\\standard\\coastdown-mda-standard",
       "entrypoint": "app.py"
