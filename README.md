@@ -69,6 +69,14 @@ Por isso, normalmente nao e necessario alterar a `ExecutionPolicy` do PowerShell
 
 Se aparecer algum erro de politica de execucao, abra o app pelo `launcher.bat` e envie o log ao responsavel tecnico.
 
+## Atalho na Area de Trabalho
+
+Na primeira configuracao, o launcher pode criar um atalho `Coastdown MDA Launcher.lnk` na Area de Trabalho. O atalho aponta para `launcher.bat` e usa a pasta do launcher como diretorio de trabalho.
+
+Tambem e possivel recriar o atalho pela interface, no botao `Criar atalho na Area de Trabalho`.
+
+Se existir o arquivo `assets/coastdown_launcher.ico`, ele sera usado como icone do atalho. Se esse arquivo nao existir, o Windows usa o icone padrao do atalho.
+
 ## Instalar/Reparar apps
 
 Cada app possui um botao `Instalar/Reparar`.

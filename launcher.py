@@ -145,7 +145,99 @@ class CoastdownLauncher(tk.Tk):
 
         self.enqueue_log(f"Pasta raiz escolhida: {root_path}")
         self.enqueue_log("config.json criado com sucesso.")
+        should_create_shortcut = messagebox.askyesno(
+            "Criar atalho",
+            "Deseja criar um atalho do Coastdown MDA Launcher na Area de Trabalho?",
+            parent=self,
+        )
+        if should_create_shortcut:
+            self.create_desktop_shortcut()
+
         return config_data
+
+    def get_desktop_path(self) -> Path:
+        user_profile = Path(os.path.expandvars("%USERPROFILE%"))
+        candidates = [
+            user_profile / "Desktop",
+            user_profile / "Area de Trabalho",
+            user_profile / "Área de Trabalho",
+            Path.home() / "Desktop",
+        ]
+
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+
+        return Path.home() / "Desktop"
+
+    def create_desktop_shortcut(self) -> bool:
+        desktop_path = self.get_desktop_path()
+        shortcut_path = desktop_path / "Coastdown MDA Launcher.lnk"
+        launcher_path = BASE_DIR / "launcher.bat"
+        icon_path = BASE_DIR / "assets" / "coastdown_launcher.ico"
+
+        self.enqueue_log("Criando atalho na Area de Trabalho...")
+        self.enqueue_log(f"Area de Trabalho usada: {desktop_path}")
+
+        if not launcher_path.exists():
+            self.enqueue_log(f"launcher.bat nao encontrado: {launcher_path}")
+            return False
+
+        if shortcut_path.exists():
+            should_recreate = self.ask_yes_no(
+                "Atalho existente",
+                "O atalho ja existe. Deseja recria-lo?",
+            )
+            if not should_recreate:
+                self.enqueue_log("Criacao de atalho cancelada pelo usuario.")
+                return False
+
+        def powershell_quote(value):
+            return "'" + str(value).replace("'", "''") + "'"
+
+        powershell_script = (
+            "$WshShell = New-Object -ComObject WScript.Shell; "
+            f"$Shortcut = $WshShell.CreateShortcut({powershell_quote(shortcut_path)}); "
+            f"$Shortcut.TargetPath = {powershell_quote(launcher_path)}; "
+            f"$Shortcut.WorkingDirectory = {powershell_quote(BASE_DIR)}; "
+        )
+        if icon_path.exists():
+            powershell_script += f"$Shortcut.IconLocation = {powershell_quote(icon_path)}; "
+        powershell_script += "$Shortcut.Save()"
+
+        try:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-Command", powershell_script],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                shell=False,
+            )
+        except OSError as error:
+            self.enqueue_log(f"Nao foi possivel criar o atalho: {error}")
+            self.show_warning(
+                "Atalho nao criado",
+                "Nao foi possivel criar o atalho. Verifique permissoes da Area de Trabalho.",
+            )
+            return False
+
+        if result.returncode != 0:
+            if result.stdout:
+                self.enqueue_log(result.stdout.strip())
+            if result.stderr:
+                self.enqueue_log(result.stderr.strip())
+            self.enqueue_log(
+                "Nao foi possivel criar o atalho. Verifique permissoes da Area de Trabalho."
+            )
+            self.show_warning(
+                "Atalho nao criado",
+                "Nao foi possivel criar o atalho. Verifique permissoes da Area de Trabalho.",
+            )
+            return False
+
+        self.enqueue_log(f"Atalho criado: {shortcut_path}")
+        return True
 
     def configure_ui(self):
         self.columnconfigure(0, weight=1)
@@ -183,6 +275,18 @@ class CoastdownLauncher(tk.Tk):
             app_config = apps.get(app_key)
             if app_config:
                 self.create_app_block(apps_frame, row_index, app_key, app_config)
+
+        shortcut_button = tk.Button(
+            apps_frame,
+            text="Criar atalho na Area de Trabalho",
+            command=lambda: self.run_in_background(
+                "Criar atalho na Area de Trabalho",
+                self.create_desktop_shortcut,
+            ),
+            width=30,
+        )
+        shortcut_button.grid(row=2, column=0, sticky="w", pady=(0, 4))
+        self.buttons.append(shortcut_button)
 
         log_frame = tk.LabelFrame(self, text="Log", padx=10, pady=10)
         log_frame.grid(row=2, column=0, sticky="nsew", padx=18, pady=18)
@@ -271,7 +375,7 @@ class CoastdownLauncher(tk.Tk):
 
         self.buttons.extend([check_button, update_button, install_button, open_button])
 
-    def run_in_background(self, title, target, app_config):
+    def run_in_background(self, title, target, app_config=None):
         thread = threading.Thread(
             target=self.background_wrapper,
             args=(title, target, app_config),
@@ -285,7 +389,10 @@ class CoastdownLauncher(tk.Tk):
         self.enqueue_log(f"== {title} ==")
 
         try:
-            target(app_config)
+            if app_config is None:
+                target()
+            else:
+                target(app_config)
         except Exception as error:
             self.enqueue_log(f"Erro inesperado: {error}")
         finally:
