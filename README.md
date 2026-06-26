@@ -46,10 +46,27 @@ Exemplo:
 
 O launcher passa a porta diretamente para o Streamlit pela linha de comando. Nao e necessario alterar `.streamlit/config.toml` nos repositorios dos apps.
 
+## Dependencias da maquina
+
+O launcher precisa de Git para verificar atualizacoes, atualizar e instalar apps. Se o Git nao for encontrado, o launcher pode perguntar se deve tentar instalar automaticamente usando `winget`.
+
+Em ambientes corporativos, a instalacao via `winget` pode depender de permissoes da maquina ou apoio do TI. Depois da instalacao, talvez seja necessario fechar e abrir o launcher novamente para o PATH ser atualizado. O acesso ao GitHub e ao PyPI tambem pode depender de liberacao do TI.
+
+## Instalar/Reparar apps
+
+Cada app possui um botao `Instalar/Reparar`.
+
+Quando a pasta local do app nao existe, o launcher pede confirmacao e clona o repositorio configurado com Git. Depois disso, prepara o ambiente virtual e instala as dependencias do `requirements.txt`.
+
+Quando a pasta local ja existe, o launcher verifica se ela e um repositorio Git. Por seguranca, pastas existentes que nao tenham `.git` nao sao sobrescritas automaticamente; nesses casos, revise o caminho configurado ou escolha outra pasta.
+
+Para repositorios Git existentes, o launcher busca a branch configurada, troca para essa branch quando possivel, atualiza com `git pull --ff-only` e reinstala as dependencias.
+
 ## O que o launcher faz
 
 - Verifica atualizacoes com Git.
 - Atualiza repositorios locais com `git pull --ff-only`.
+- Instala ou repara apps com `git clone`, checkout da branch configurada e `git pull --ff-only`.
 - Detecta ambientes virtuais `venv` e `.venv`.
 - Cria `.venv` e instala `requirements.txt` com confirmacao do usuario quando necessario.
 - Valida se o Streamlit esta disponivel antes de abrir o app.

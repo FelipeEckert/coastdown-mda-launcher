@@ -1,6 +1,7 @@
 import json
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import threading
@@ -29,6 +30,7 @@ class CoastdownLauncher(tk.Tk):
 
         self.log_queue = queue.Queue()
         self.buttons = []
+        self.git_executable = None
 
         self.config_data, used_example = self.load_config()
         self.configure_ui()
@@ -169,6 +171,18 @@ class CoastdownLauncher(tk.Tk):
         )
         update_button.grid(row=2, column=1, sticky="w", padx=(0, 8))
 
+        install_button = tk.Button(
+            block,
+            text="Instalar/Reparar",
+            command=lambda: self.run_in_background(
+                f"Instalar/Reparar - {app_config.get('name', app_key)}",
+                self.install_or_repair_app,
+                app_config,
+            ),
+            width=18,
+        )
+        install_button.grid(row=2, column=2, sticky="w", padx=(0, 8))
+
         open_button = tk.Button(
             block,
             text="Abrir",
@@ -179,9 +193,9 @@ class CoastdownLauncher(tk.Tk):
             ),
             width=18,
         )
-        open_button.grid(row=2, column=2, sticky="w")
+        open_button.grid(row=2, column=3, sticky="w")
 
-        self.buttons.extend([check_button, update_button, open_button])
+        self.buttons.extend([check_button, update_button, install_button, open_button])
 
     def run_in_background(self, title, target, app_config):
         thread = threading.Thread(
@@ -246,6 +260,77 @@ class CoastdownLauncher(tk.Tk):
             self.enqueue_log("Porta invalida na configuracao. Usando porta padrao 8501.")
             return 8501
 
+    def find_git_executable(self) -> str | None:
+        git_path = shutil.which("git")
+        if git_path:
+            return git_path
+
+        common_paths = [
+            r"%ProgramFiles%\Git\cmd\git.exe",
+            r"%ProgramFiles%\Git\bin\git.exe",
+            r"%LOCALAPPDATA%\Programs\Git\cmd\git.exe",
+        ]
+        for candidate in common_paths:
+            expanded_path = Path(os.path.expandvars(candidate))
+            if expanded_path.exists():
+                return str(expanded_path)
+
+        return None
+
+    def ensure_git_available(self) -> bool:
+        self.enqueue_log("Verificando Git...")
+
+        git_path = self.find_git_executable()
+        if git_path:
+            self.git_executable = git_path
+            self.enqueue_log(f"Git encontrado: {git_path}")
+            return True
+
+        self.enqueue_log("Git nao encontrado.")
+        should_install = self.ask_yes_no(
+            "Git nao encontrado",
+            "Git nao foi encontrado nesta maquina.\n\n"
+            "O launcher precisa do Git para verificar atualizacoes, atualizar "
+            "e instalar os apps.\n\n"
+            "Deseja tentar instalar o Git automaticamente usando winget?",
+        )
+        if not should_install:
+            self.enqueue_log("Instalacao do Git cancelada pelo usuario.")
+            return False
+
+        winget_path = shutil.which("winget")
+        if not winget_path:
+            self.enqueue_log(
+                "Instalacao automatica do Git nao foi possivel. Solicite apoio ao TI."
+            )
+            return False
+
+        self.enqueue_log("Tentando instalar Git via winget...")
+        install_code, _ = self.run_command(
+            [winget_path, "install", "-e", "--id", "Git.Git"],
+            BASE_DIR,
+        )
+        self.enqueue_log(
+            "Talvez seja necessario fechar e abrir novamente o launcher para o PATH ser atualizado."
+        )
+
+        if install_code != 0:
+            self.enqueue_log(
+                "Instalacao automatica do Git nao foi possivel. Solicite apoio ao TI."
+            )
+            return False
+
+        git_path = self.find_git_executable()
+        if git_path:
+            self.git_executable = git_path
+            self.enqueue_log(f"Git encontrado: {git_path}")
+            return True
+
+        self.enqueue_log(
+            "Git instalado, mas ainda nao foi possivel confirmar o comando nesta sessao."
+        )
+        return False
+
     def ask_yes_no(self, title, message):
         if threading.current_thread() is threading.main_thread():
             return messagebox.askyesno(title, message, parent=self)
@@ -262,6 +347,22 @@ class CoastdownLauncher(tk.Tk):
         self.after(0, show_messagebox)
         done.wait()
         return result["answer"]
+
+    def show_warning(self, title, message):
+        if threading.current_thread() is threading.main_thread():
+            messagebox.showwarning(title, message, parent=self)
+            return
+
+        done = threading.Event()
+
+        def show_messagebox():
+            try:
+                messagebox.showwarning(title, message, parent=self)
+            finally:
+                done.set()
+
+        self.after(0, show_messagebox)
+        done.wait()
 
     def find_venv_python(self, app_path: Path, app_config: dict) -> Path | None:
         venv_names = app_config.get("venv_names")
@@ -397,16 +498,22 @@ class CoastdownLauncher(tk.Tk):
         self.enqueue_log("Edge/Chrome nao encontrado. Abrindo no navegador padrao.")
         webbrowser.open(url)
 
-    def prepare_app_environment(self, app_path: Path, app_config: dict) -> Path | None:
+    def prepare_app_environment(
+        self,
+        app_path: Path,
+        app_config: dict,
+        ask_confirmation: bool = True,
+    ) -> Path | None:
         app_name = app_config.get("name", "sem nome")
-        should_prepare = self.ask_yes_no(
-            "Ambiente virtual nao encontrado",
-            f"Ambiente virtual nao encontrado para {app_name}.\n\n"
-            "Deseja preparar esta aplicacao agora?",
-        )
-        if not should_prepare:
-            self.enqueue_log("Preparo do ambiente virtual cancelado pelo usuario.")
-            return None
+        if ask_confirmation:
+            should_prepare = self.ask_yes_no(
+                "Ambiente virtual nao encontrado",
+                f"Ambiente virtual nao encontrado para {app_name}.\n\n"
+                "Deseja preparar esta aplicacao agora?",
+            )
+            if not should_prepare:
+                self.enqueue_log("Preparo do ambiente virtual cancelado pelo usuario.")
+                return None
 
         venv_python = self.create_venv(app_path)
         if venv_python is None:
@@ -421,6 +528,119 @@ class CoastdownLauncher(tk.Tk):
 
         return venv_python
 
+    def prepare_existing_environment(self, app_path: Path, app_config: dict) -> bool:
+        venv_python = self.find_venv_python(app_path, app_config)
+        if venv_python is None:
+            venv_python = self.prepare_app_environment(
+                app_path,
+                app_config,
+                ask_confirmation=False,
+            )
+            if venv_python is None:
+                return False
+            return True
+
+        return self.install_requirements(app_path, venv_python)
+
+    def checkout_configured_branch(self, app_path: Path, branch: str) -> bool:
+        git_command = self.git_executable or "git"
+
+        self.enqueue_log(f"Trocando para branch {branch}...")
+        checkout_code, _ = self.run_command([git_command, "checkout", branch], app_path)
+        if checkout_code == 0:
+            return True
+
+        self.enqueue_log(f"Branch local {branch} nao encontrada. Criando a partir da remota.")
+        checkout_new_code, _ = self.run_command(
+            [git_command, "checkout", "-b", branch, f"origin/{branch}"],
+            app_path,
+        )
+        return checkout_new_code == 0
+
+    def install_or_repair_app(self, app_config) -> bool:
+        app_path = self.get_app_path(app_config)
+        app_name = app_config.get("name", "sem nome")
+        repo_url = app_config.get("repo_url", "")
+        branch = app_config.get("branch", "release")
+
+        self.enqueue_log(f"Aplicacao: {app_name}")
+        self.enqueue_log(f"Caminho local: {app_path}")
+
+        if not repo_url:
+            self.enqueue_log("URL do repositorio nao configurada.")
+            return False
+
+        if not self.ensure_git_available():
+            return False
+
+        git_command = self.git_executable or "git"
+
+        if not app_path.exists():
+            self.enqueue_log("Aplicacao nao encontrada localmente.")
+            should_install = self.ask_yes_no(
+                "Aplicacao nao instalada",
+                f"A aplicacao {app_name} ainda nao esta instalada nesta maquina.\n\n"
+                "Deseja instalar agora?",
+            )
+            if not should_install:
+                self.enqueue_log("Instalacao cancelada pelo usuario.")
+                return False
+
+            try:
+                app_path.parent.mkdir(parents=True, exist_ok=True)
+            except OSError as error:
+                self.enqueue_log(f"Nao foi possivel criar a pasta pai: {error}")
+                return False
+
+            self.enqueue_log(f"Clonando {repo_url}...")
+            clone_code, _ = self.run_command(
+                [git_command, "clone", "--branch", branch, repo_url, str(app_path)],
+                app_path.parent,
+            )
+            if clone_code != 0:
+                self.enqueue_log("Clone falhou.")
+                return False
+
+            self.enqueue_log("Clone concluido.")
+        else:
+            self.enqueue_log("Pasta local encontrada.")
+            if not (app_path / ".git").exists():
+                message = (
+                    "A pasta da aplicacao ja existe, mas nao parece ser um repositorio Git.\n\n"
+                    "Por seguranca, o launcher nao ira sobrescrever esta pasta.\n"
+                    "Verifique o caminho configurado ou escolha outra pasta."
+                )
+                self.enqueue_log(message)
+                self.show_warning("Pasta existente sem Git", message)
+                return False
+
+            self.enqueue_log("Repositorio Git detectado.")
+            self.enqueue_log(f"Buscando branch remota {branch}...")
+            fetch_code, _ = self.run_command([git_command, "fetch", "origin", branch], app_path)
+            if fetch_code != 0:
+                self.enqueue_log("Nao foi possivel buscar a branch remota.")
+                return False
+
+            if not self.checkout_configured_branch(app_path, branch):
+                self.enqueue_log("Nao foi possivel trocar para a branch configurada.")
+                return False
+
+            self.enqueue_log("Atualizando codigo...")
+            pull_code, _ = self.run_command(
+                [git_command, "pull", "--ff-only", "origin", branch],
+                app_path,
+            )
+            if pull_code != 0:
+                self.enqueue_log("Atualizacao via Git falhou.")
+                return False
+
+        if not self.prepare_existing_environment(app_path, app_config):
+            self.enqueue_log("Nao foi possivel preparar a aplicacao.")
+            return False
+
+        self.enqueue_log("Aplicacao preparada com sucesso.")
+        return True
+
     def check_update(self, app_config):
         app_path = self.get_app_path(app_config)
         branch = app_config.get("branch", "release")
@@ -433,14 +653,19 @@ class CoastdownLauncher(tk.Tk):
             self.enqueue_log("Clone automatico sera implementado em etapa futura.")
             return
 
-        fetch_code, _ = self.run_command(["git", "fetch", "origin", branch], app_path)
+        if not self.ensure_git_available():
+            return
+
+        git_command = self.git_executable or "git"
+
+        fetch_code, _ = self.run_command([git_command, "fetch", "origin", branch], app_path)
         if fetch_code != 0:
             self.enqueue_log("Nao foi possivel verificar atualizacao.")
             return
 
-        local_code, local_commit = self.run_command(["git", "rev-parse", "HEAD"], app_path)
+        local_code, local_commit = self.run_command([git_command, "rev-parse", "HEAD"], app_path)
         remote_code, remote_commit = self.run_command(
-            ["git", "rev-parse", f"origin/{branch}"],
+            [git_command, "rev-parse", f"origin/{branch}"],
             app_path,
         )
 
@@ -466,11 +691,25 @@ class CoastdownLauncher(tk.Tk):
         self.enqueue_log(f"Caminho local: {app_path}")
 
         if not app_path.exists():
-            self.enqueue_log("Repositorio ainda nao existe nesta maquina.")
+            should_install = self.ask_yes_no(
+                "Aplicacao nao instalada",
+                "Aplicacao nao instalada.\n\nDeseja instalar agora?",
+            )
+            if not should_install:
+                self.enqueue_log("Aplicacao nao instalada. Use Instalar/Reparar.")
+                return
+
+            if not self.install_or_repair_app(app_config):
+                return
             return
 
+        if not self.ensure_git_available():
+            return
+
+        git_command = self.git_executable or "git"
+
         pull_code, _ = self.run_command(
-            ["git", "pull", "--ff-only", "origin", branch],
+            [git_command, "pull", "--ff-only", "origin", branch],
             app_path,
         )
         if pull_code != 0:
@@ -495,8 +734,16 @@ class CoastdownLauncher(tk.Tk):
         self.enqueue_log(f"Caminho local: {app_path}")
 
         if not app_path.exists():
-            self.enqueue_log("Repositorio ainda nao existe nesta maquina.")
-            return
+            should_install = self.ask_yes_no(
+                "Aplicacao nao instalada",
+                "Aplicacao nao instalada.\n\nDeseja instalar agora?",
+            )
+            if not should_install:
+                self.enqueue_log("Abertura cancelada porque a aplicacao nao esta instalada.")
+                return
+
+            if not self.install_or_repair_app(app_config):
+                return
 
         venv_python = self.find_venv_python(app_path, app_config)
         if venv_python is None:
