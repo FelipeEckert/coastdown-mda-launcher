@@ -2,6 +2,7 @@ import json
 import os
 import queue
 import subprocess
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -234,6 +235,122 @@ class CoastdownLauncher(tk.Tk):
     def get_app_path(self, app_config):
         return Path(os.path.expandvars(app_config.get("local_path", "")))
 
+    def ask_yes_no(self, title, message):
+        if threading.current_thread() is threading.main_thread():
+            return messagebox.askyesno(title, message, parent=self)
+
+        result = {"answer": False}
+        done = threading.Event()
+
+        def show_messagebox():
+            try:
+                result["answer"] = messagebox.askyesno(title, message, parent=self)
+            finally:
+                done.set()
+
+        self.after(0, show_messagebox)
+        done.wait()
+        return result["answer"]
+
+    def find_venv_python(self, app_path: Path, app_config: dict) -> Path | None:
+        venv_names = app_config.get("venv_names")
+        if not venv_names:
+            venv_names = [".venv", "venv"]
+
+        for venv_name in venv_names:
+            venv_python = app_path / venv_name / "Scripts" / "python.exe"
+            if venv_python.exists():
+                self.enqueue_log(f"Ambiente virtual encontrado: {venv_name}")
+                return venv_python
+
+        self.enqueue_log("Ambiente virtual nao encontrado.")
+        return None
+
+    def create_venv(self, app_path: Path) -> Path | None:
+        venv_path = app_path / ".venv"
+        venv_python = venv_path / "Scripts" / "python.exe"
+
+        self.enqueue_log(f"Criando ambiente virtual em: {venv_path}")
+        return_code, _ = self.run_command(
+            [sys.executable, "-m", "venv", ".venv"],
+            app_path,
+        )
+        if return_code != 0:
+            self.enqueue_log("Erro ao criar ambiente virtual.")
+            return None
+
+        if not venv_python.exists():
+            self.enqueue_log(f"Erro: Python do ambiente virtual nao encontrado: {venv_python}")
+            return None
+
+        self.enqueue_log("Ambiente virtual criado: .venv")
+        return venv_python
+
+    def upgrade_pip(self, app_path: Path, venv_python: Path) -> bool:
+        self.enqueue_log("Atualizando pip no ambiente virtual...")
+        return_code, _ = self.run_command(
+            [str(venv_python), "-m", "pip", "install", "--upgrade", "pip"],
+            app_path,
+        )
+        if return_code != 0:
+            self.enqueue_log("Falha ao atualizar pip.")
+            return False
+
+        return True
+
+    def install_requirements(self, app_path: Path, venv_python: Path) -> bool:
+        requirements = app_path / "requirements.txt"
+
+        if not requirements.exists():
+            self.enqueue_log(
+                "requirements.txt nao encontrado. Pulando instalacao de dependencias."
+            )
+            return True
+
+        self.enqueue_log("Instalando dependencias do requirements.txt...")
+        return_code, _ = self.run_command(
+            [str(venv_python), "-m", "pip", "install", "-r", "requirements.txt"],
+            app_path,
+        )
+        if return_code != 0:
+            self.enqueue_log("Falha ao instalar dependencias.")
+            return False
+
+        self.enqueue_log("Dependencias instaladas com sucesso.")
+        return True
+
+    def has_streamlit(self, venv_python: Path) -> bool:
+        app_path = venv_python.parents[2]
+        return_code, _ = self.run_command(
+            [str(venv_python), "-m", "streamlit", "--version"],
+            app_path,
+        )
+        return return_code == 0
+
+    def prepare_app_environment(self, app_path: Path, app_config: dict) -> Path | None:
+        app_name = app_config.get("name", "sem nome")
+        should_prepare = self.ask_yes_no(
+            "Ambiente virtual nao encontrado",
+            f"Ambiente virtual nao encontrado para {app_name}.\n\n"
+            "Deseja preparar esta aplicacao agora?",
+        )
+        if not should_prepare:
+            self.enqueue_log("Preparo do ambiente virtual cancelado pelo usuario.")
+            return None
+
+        venv_python = self.create_venv(app_path)
+        if venv_python is None:
+            return None
+
+        requirements = app_path / "requirements.txt"
+        if requirements.exists() and not self.upgrade_pip(app_path, venv_python):
+            return None
+
+        if not self.install_requirements(app_path, venv_python):
+            return None
+
+        return venv_python
+
     def check_update(self, app_config):
         app_path = self.get_app_path(app_config)
         branch = app_config.get("branch", "release")
@@ -290,23 +407,15 @@ class CoastdownLauncher(tk.Tk):
             self.enqueue_log("Atualizacao via Git falhou.")
             return
 
-        venv_python = app_path / ".venv" / "Scripts" / "python.exe"
-        requirements = app_path / "requirements.txt"
-
-        if not venv_python.exists():
-            self.enqueue_log("Aviso: .venv nao encontrado. Instalacao de dependencias ignorada.")
+        venv_python = self.find_venv_python(app_path, app_config)
+        if venv_python is None:
+            venv_python = self.prepare_app_environment(app_path, app_config)
+            if venv_python is None:
+                self.enqueue_log("Codigo atualizado, mas ambiente virtual nao preparado.")
+                return
             return
 
-        if not requirements.exists():
-            self.enqueue_log(
-                "Aviso: requirements.txt nao encontrado. Instalacao de dependencias ignorada."
-            )
-            return
-
-        self.run_command(
-            [str(venv_python), "-m", "pip", "install", "-r", "requirements.txt"],
-            app_path,
-        )
+        self.install_requirements(app_path, venv_python)
 
     def open_app(self, app_config):
         app_path = self.get_app_path(app_config)
@@ -319,17 +428,34 @@ class CoastdownLauncher(tk.Tk):
             self.enqueue_log("Repositorio ainda nao existe nesta maquina.")
             return
 
-        venv_python = app_path / ".venv" / "Scripts" / "python.exe"
-        if not venv_python.exists():
-            self.enqueue_log(
-                ".venv nao encontrado. Crie o ambiente virtual dentro do app antes de abrir pelo launcher."
-            )
-            return
+        venv_python = self.find_venv_python(app_path, app_config)
+        if venv_python is None:
+            venv_python = self.prepare_app_environment(app_path, app_config)
+            if venv_python is None:
+                self.enqueue_log("Abertura cancelada porque o ambiente nao foi preparado.")
+                return
 
         entrypoint_path = app_path / entrypoint
         if not entrypoint_path.exists():
             self.enqueue_log(f"Arquivo de entrada nao encontrado: {entrypoint_path}")
             return
+
+        if not self.has_streamlit(venv_python):
+            should_install = self.ask_yes_no(
+                "Dependencias nao encontradas",
+                "O Streamlit ou alguma dependencia necessaria nao foi encontrada.\n\n"
+                "Deseja instalar as dependencias agora?",
+            )
+            if not should_install:
+                self.enqueue_log("Abertura cancelada porque as dependencias nao foram instaladas.")
+                return
+
+            if not self.install_requirements(app_path, venv_python):
+                return
+
+            if not self.has_streamlit(venv_python):
+                self.enqueue_log("Streamlit ainda nao foi encontrado apos instalar dependencias.")
+                return
 
         command = [str(venv_python), "-m", "streamlit", "run", entrypoint]
         self.enqueue_log(f"$ {subprocess.list2cmdline(command)}")

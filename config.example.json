@@ -4,15 +4,17 @@
       "name": "Coastdown MDA Standard",
       "repo_url": "https://github.com/FelipeEckert/cd-streamlit.git",
       "branch": "release",
-      "local_path": "%USERPROFILE%\\CoastdownMDA\\standard\\coastdown-mda-standard",
-      "entrypoint": "app.py"
+      "local_path": "%USERPROFILE%\\CoastdownMDA\\standard\\cd-streamlit",
+      "entrypoint": "app.py",
+      "venv_names": ["venv", ".venv"]
     },
     "split": {
       "name": "Coastdown MDA Split",
       "repo_url": "https://github.com/FelipeEckert/coastdown-mda-split.git",
       "branch": "release",
       "local_path": "%USERPROFILE%\\CoastdownMDA\\split\\coastdown-mda-split",
-      "entrypoint": "app.py"
+      "entrypoint": "app.py",
+      "venv_names": [".venv", "venv"]
     }
   }
 }
