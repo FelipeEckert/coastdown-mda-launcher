@@ -61,6 +61,14 @@ O launcher precisa de Git para verificar atualizacoes, atualizar e instalar apps
 
 Em ambientes corporativos, a instalacao via `winget` pode depender de permissoes da maquina ou apoio do TI. Depois da instalacao, talvez seja necessario fechar e abrir o launcher novamente para o PATH ser atualizado. O acesso ao GitHub e ao PyPI tambem pode depender de liberacao do TI.
 
+## Ambientes virtuais e PowerShell
+
+O launcher nao ativa o ambiente virtual via PowerShell. Em vez disso, executa os comandos diretamente pelo `python.exe` do ambiente virtual, por exemplo `venv\Scripts\python.exe -m pip` e `venv\Scripts\python.exe -m streamlit`.
+
+Por isso, normalmente nao e necessario alterar a `ExecutionPolicy` do PowerShell para usar o launcher. O usuario nao precisa rodar manualmente `.\venv\Scripts\Activate.ps1`, `.\.venv\Scripts\Activate.ps1` nem `Set-ExecutionPolicy`.
+
+Se aparecer algum erro de politica de execucao, abra o app pelo `launcher.bat` e envie o log ao responsavel tecnico.
+
 ## Instalar/Reparar apps
 
 Cada app possui um botao `Instalar/Reparar`.

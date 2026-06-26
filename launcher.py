@@ -870,6 +870,7 @@ class CoastdownLauncher(tk.Tk):
                 cwd=str(app_path),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                shell=False,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
@@ -888,15 +889,46 @@ class CoastdownLauncher(tk.Tk):
         self.wait_for_localhost(url)
         self.open_browser_app_window(url)
 
+    def is_execution_policy_error(self, text: str) -> bool:
+        lower_text = text.lower()
+        indicators = [
+            "executionpolicy",
+            "running scripts is disabled",
+            "activate.ps1",
+            "nao pode ser carregado",
+            "não pode ser carregado",
+            "execucao de scripts foi desabilitada",
+            "execução de scripts foi desabilitada",
+        ]
+        return any(indicator in lower_text for indicator in indicators)
+
+    def log_execution_policy_help(self):
+        self.enqueue_log(
+            "Foi detectado um erro relacionado a politica de execucao do PowerShell."
+        )
+        self.enqueue_log(
+            "O launcher nao precisa ativar o ambiente virtual manualmente."
+        )
+        self.enqueue_log("Tente abrir o app novamente pelo botao Abrir.")
+        self.enqueue_log(
+            "Se o problema persistir, envie este log ao suporte tecnico."
+        )
+
     def read_process_output(self, process):
         if process.stdout is None:
             return
 
+        execution_policy_detected = False
         for line in process.stdout:
-            self.enqueue_log(line.rstrip())
+            clean_line = line.rstrip()
+            self.enqueue_log(clean_line)
+            if self.is_execution_policy_error(clean_line):
+                execution_policy_detected = True
 
         return_code = process.wait()
         self.enqueue_log(f"Processo encerrado com codigo {return_code}.")
+        if return_code != 0 and execution_policy_detected:
+            self.log_execution_policy_help()
 
     def run_command(self, command, cwd):
         self.enqueue_log(f"{cwd}> {subprocess.list2cmdline(command)}")
@@ -908,6 +940,7 @@ class CoastdownLauncher(tk.Tk):
                 cwd=str(cwd),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                shell=False,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
@@ -925,6 +958,8 @@ class CoastdownLauncher(tk.Tk):
         return_code = process.wait()
         if return_code != 0:
             self.enqueue_log(f"Comando terminou com codigo {return_code}.")
+            if self.is_execution_policy_error("\n".join(output_lines)):
+                self.log_execution_policy_help()
 
         return return_code, "\n".join(output_lines)
 
