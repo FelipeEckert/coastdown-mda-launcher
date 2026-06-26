@@ -23,9 +23,18 @@ O arquivo abre o `launcher.py` a partir da propria pasta do projeto.
 
 O arquivo `config.example.json` serve como modelo da configuracao esperada.
 
-Para personalizar caminhos locais, crie um arquivo `config.json` na raiz do projeto com a mesma estrutura do exemplo. O `config.json` e local da maquina e nao deve ser versionado.
+Na primeira execucao, se `config.json` ainda nao existir, o launcher inicia uma configuracao guiada. O usuario pode usar a pasta recomendada `%USERPROFILE%\CoastdownMDA` ou escolher outra pasta.
 
-Se `config.json` nao existir, o launcher usa `config.example.json` temporariamente e mostra um aviso.
+Depois da escolha, o launcher cria o `config.json` local automaticamente a partir de `config.example.json`. O `config.example.json` e o modelo versionado; o `config.json` e local da maquina e nao deve ser commitado.
+
+Os apps sao configurados em subpastas da pasta raiz escolhida:
+
+```text
+<root>\standard\cd-streamlit
+<root>\split\coastdown-mda-split
+```
+
+O launcher cria as pastas intermediarias `standard` e `split`; as pastas finais dos repositorios sao criadas pelo `git clone` quando o usuario usa `Instalar/Reparar`.
 
 Cada app pode definir sua propria porta pelo campo `port` no `config.json`. Se o campo nao existir, o launcher usa a porta padrao `8501`.
 
@@ -77,6 +86,5 @@ Para repositorios Git existentes, o launcher busca a branch configurada, troca p
 ## Restricoes
 
 - Nao gera executavel `.exe`.
-- Nao clona repositorios automaticamente nesta primeira versao.
 - Nao instala bibliotecas externas para o launcher.
 - Nao mistura codigo dos apps Standard e Split neste repositorio.

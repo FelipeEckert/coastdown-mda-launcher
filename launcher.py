@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 import webbrowser
 from pathlib import Path
+from tkinter import filedialog
 from tkinter import messagebox
 from tkinter import scrolledtext
 
@@ -31,47 +32,120 @@ class CoastdownLauncher(tk.Tk):
         self.log_queue = queue.Queue()
         self.buttons = []
         self.git_executable = None
+        self.startup_cancelled = False
 
-        self.config_data, used_example = self.load_config()
+        self.config_data, _ = self.load_config()
+        if self.startup_cancelled:
+            self.destroy()
+            return
+
         self.configure_ui()
         self.after(100, self.flush_log_queue)
 
-        if used_example:
-            self.log(
-                "Aviso: config.json nao foi encontrado. "
-                "Usando config.example.json temporariamente."
-            )
-            messagebox.showwarning(
-                "Configuracao local nao encontrada",
-                "config.json nao foi encontrado.\n\n"
-                "O arquivo config.example.json esta sendo usado temporariamente. "
-                "Crie um config.json local quando precisar personalizar os caminhos.",
-            )
-
     def load_config(self):
-        config_path = CONFIG_FILE
-        used_example = False
+        if CONFIG_FILE.exists():
+            config_data = self.read_config_file(CONFIG_FILE)
+            return config_data, False
 
-        if not config_path.exists():
-            config_path = CONFIG_EXAMPLE_FILE
-            used_example = True
-
-        if not config_path.exists():
+        if not CONFIG_EXAMPLE_FILE.exists():
             messagebox.showerror(
                 "Configuracao nao encontrada",
                 "Nenhum arquivo config.json ou config.example.json foi encontrado.",
             )
-            return {"apps": {}}, used_example
+            return {"apps": {}}, False
 
+        self.enqueue_log("Configuracao inicial necessaria.")
+        example_config = self.read_config_file(CONFIG_EXAMPLE_FILE)
+        config_data = self.create_initial_config(example_config)
+        if config_data is None:
+            self.startup_cancelled = True
+            return {"apps": {}}, False
+
+        return config_data, False
+
+    def read_config_file(self, config_path):
         try:
             with config_path.open("r", encoding="utf-8") as config_file:
-                return json.load(config_file), used_example
+                return json.load(config_file)
         except (OSError, json.JSONDecodeError) as error:
             messagebox.showerror(
                 "Erro ao ler configuracao",
                 f"Nao foi possivel ler {config_path.name}:\n{error}",
             )
-            return {"apps": {}}, used_example
+            return {"apps": {}}
+
+    def create_initial_config(self, example_config):
+        recommended_root = Path.home() / "CoastdownMDA"
+        answer = messagebox.askyesnocancel(
+            "Configuracao inicial",
+            "O Coastdown MDA Launcher ainda nao foi configurado nesta maquina.\n\n"
+            "Escolha onde os aplicativos Coastdown serao instalados.\n"
+            f"Local recomendado:\n{recommended_root}\n\n"
+            "Deseja usar o local recomendado?",
+            parent=self,
+        )
+
+        if answer is None:
+            messagebox.showinfo(
+                "Configuracao cancelada",
+                "Configuracao inicial cancelada. O launcher sera encerrado.",
+                parent=self,
+            )
+            return None
+
+        if answer:
+            root_path = recommended_root
+        else:
+            selected_path = filedialog.askdirectory(
+                title="Escolha onde instalar os aplicativos Coastdown",
+                initialdir=str(Path.home()),
+                parent=self,
+            )
+            if not selected_path:
+                messagebox.showinfo(
+                    "Configuracao cancelada",
+                    "Nenhuma pasta foi escolhida. O launcher sera encerrado.",
+                    parent=self,
+                )
+                return None
+            root_path = Path(selected_path)
+
+        try:
+            root_path.mkdir(parents=True, exist_ok=True)
+            (root_path / "standard").mkdir(parents=True, exist_ok=True)
+            (root_path / "split").mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            messagebox.showerror(
+                "Erro ao criar pastas",
+                f"Nao foi possivel criar as pastas iniciais:\n{error}",
+                parent=self,
+            )
+            return None
+
+        config_data = json.loads(json.dumps(example_config))
+        apps = config_data.get("apps", {})
+        if "standard" in apps:
+            apps["standard"]["local_path"] = str(root_path / "standard" / "cd-streamlit")
+        if "split" in apps:
+            apps["split"]["local_path"] = str(root_path / "split" / "coastdown-mda-split")
+
+        try:
+            with CONFIG_FILE.open("x", encoding="utf-8") as config_file:
+                json.dump(config_data, config_file, indent=2, ensure_ascii=False)
+                config_file.write("\n")
+        except FileExistsError:
+            return self.read_config_file(CONFIG_FILE)
+        except OSError as error:
+            messagebox.showerror(
+                "Erro ao criar configuracao",
+                f"Nao foi possivel criar config.json:\n{error}",
+                parent=self,
+            )
+            return None
+
+        self.enqueue_log(f"Pasta raiz escolhida: {root_path}")
+        self.enqueue_log("config.json criado com sucesso.")
+        return config_data
 
     def configure_ui(self):
         self.columnconfigure(0, weight=1)
@@ -857,4 +931,5 @@ class CoastdownLauncher(tk.Tk):
 
 if __name__ == "__main__":
     launcher = CoastdownLauncher()
-    launcher.mainloop()
+    if not getattr(launcher, "startup_cancelled", False):
+        launcher.mainloop()
