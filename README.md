@@ -1,15 +1,15 @@
 # Coastdown MDA Launcher
 
-Launcher simples para Windows usado para abrir e atualizar as aplicacoes Streamlit do Coastdown MDA.
+Launcher simples para Windows usado para abrir e atualizar as aplicações Streamlit do Coastdown MDA.
 
-Este repositorio nao contem o codigo do Coastdown MDA Standard nem do Coastdown MDA Split. Esses apps continuam em repositorios separados, e o launcher apenas gerencia a execucao local usando Git, Python, ambientes virtuais e Streamlit.
+Este repositório não contém o código do Coastdown MDA Standard nem do Coastdown MDA Split. Esses apps continuam em repositórios separados, e o launcher apenas gerencia a execução local usando Git, Python, ambientes virtuais e Streamlit.
 
-## Aplicacoes gerenciadas
+## Aplicações Gerenciadas
 
 - Coastdown MDA Standard
 - Coastdown MDA Split
 
-## Como iniciar
+## Como Iniciar
 
 Execute o arquivo:
 
@@ -17,26 +17,28 @@ Execute o arquivo:
 launcher.bat
 ```
 
-O arquivo abre o `launcher.py` a partir da propria pasta do projeto.
+O arquivo abre o `launcher.py` a partir da própria pasta do projeto.
 
-## Configuracao
+O launcher abre em janela maximizada para facilitar o uso em telas corporativas.
 
-O arquivo `config.example.json` serve como modelo da configuracao esperada.
+## Configuração
 
-Na primeira execucao, se `config.json` ainda nao existir, o launcher inicia uma configuracao guiada. O usuario pode usar a pasta recomendada `%USERPROFILE%\CoastdownMDA` ou escolher outra pasta.
+O arquivo `config.example.json` serve como modelo da configuração esperada.
 
-Depois da escolha, o launcher cria o `config.json` local automaticamente a partir de `config.example.json`. O `config.example.json` e o modelo versionado; o `config.json` e local da maquina e nao deve ser commitado.
+Na primeira execução, se `config.json` ainda não existir, o launcher inicia uma configuração guiada. O usuário pode usar a pasta recomendada `%USERPROFILE%\CoastdownMDA` ou escolher outra pasta.
 
-Os apps sao configurados em subpastas da pasta raiz escolhida:
+Depois da escolha, o launcher cria o `config.json` local automaticamente a partir de `config.example.json`. O `config.example.json` é o modelo versionado; o `config.json` é local da máquina e não deve ser commitado.
+
+Os apps são configurados em subpastas da pasta raiz escolhida:
 
 ```text
 <root>\standard\cd-streamlit
 <root>\split\coastdown-mda-split
 ```
 
-O launcher cria as pastas intermediarias `standard` e `split`; as pastas finais dos repositorios sao criadas pelo `git clone` quando o usuario usa `Instalar/Reparar`.
+O launcher cria as pastas intermediárias `standard` e `split`; as pastas finais dos repositórios são criadas pelo `git clone` quando o usuário usa `Instalar/Reparar`.
 
-Cada app pode definir sua propria porta pelo campo `port` no `config.json`. Se o campo nao existir, o launcher usa a porta padrao `8501`.
+Cada app pode definir sua própria porta pelo campo `port` no `config.json`. Se o campo não existir, o launcher usa a porta padrão `8501`.
 
 Exemplo:
 
@@ -53,54 +55,76 @@ Exemplo:
 }
 ```
 
-O launcher passa a porta diretamente para o Streamlit pela linha de comando. Nao e necessario alterar `.streamlit/config.toml` nos repositorios dos apps.
+O launcher passa a porta diretamente para o Streamlit pela linha de comando. Não é necessário alterar `.streamlit/config.toml` nos repositórios dos apps.
 
-## Dependencias da maquina
+Os apps são abertos em modo app do Microsoft Edge ou Google Chrome e o launcher tenta iniciar essas janelas maximizadas.
 
-O launcher precisa de Git para verificar atualizacoes, atualizar e instalar apps. Se o Git nao for encontrado, o launcher pode perguntar se deve tentar instalar automaticamente usando `winget`.
+## Dependências Da Máquina
 
-Em ambientes corporativos, a instalacao via `winget` pode depender de permissoes da maquina ou apoio do TI. Depois da instalacao, talvez seja necessario fechar e abrir o launcher novamente para o PATH ser atualizado. O acesso ao GitHub e ao PyPI tambem pode depender de liberacao do TI.
+O launcher precisa de Git para verificar atualizações, atualizar e instalar apps. Se o Git não for encontrado, o launcher pode perguntar se deve tentar instalar automaticamente usando `winget`.
 
-## Ambientes virtuais e PowerShell
+Em ambientes corporativos, a instalação via `winget` pode depender de permissões da máquina ou apoio do TI. Depois da instalação, talvez seja necessário fechar e abrir o launcher novamente para o PATH ser atualizado. O acesso ao GitHub e ao PyPI também pode depender de liberação do TI.
 
-O launcher nao ativa o ambiente virtual via PowerShell. Em vez disso, executa os comandos diretamente pelo `python.exe` do ambiente virtual, por exemplo `venv\Scripts\python.exe -m pip` e `venv\Scripts\python.exe -m streamlit`.
+## Ambientes Virtuais E PowerShell
 
-Por isso, normalmente nao e necessario alterar a `ExecutionPolicy` do PowerShell para usar o launcher. O usuario nao precisa rodar manualmente `.\venv\Scripts\Activate.ps1`, `.\.venv\Scripts\Activate.ps1` nem `Set-ExecutionPolicy`.
+O launcher não ativa o ambiente virtual via PowerShell. Em vez disso, executa os comandos diretamente pelo `python.exe` do ambiente virtual, por exemplo `venv\Scripts\python.exe -m pip` e `venv\Scripts\python.exe -m streamlit`.
 
-Se aparecer algum erro de politica de execucao, abra o app pelo `launcher.bat` e envie o log ao responsavel tecnico.
+Por isso, normalmente não é necessário alterar a `ExecutionPolicy` do PowerShell para usar o launcher. O usuário não precisa rodar manualmente `.\venv\Scripts\Activate.ps1`, `.\.venv\Scripts\Activate.ps1` nem `Set-ExecutionPolicy`.
 
-## Atalho na Area de Trabalho
+Se aparecer algum erro de política de execução, abra o app pelo `launcher.bat` e envie o log ao responsável técnico.
 
-Na primeira configuracao, o launcher pode criar um atalho `Coastdown MDA Launcher.lnk` na Area de Trabalho. O atalho aponta para `launcher.bat` e usa a pasta do launcher como diretorio de trabalho.
+## Atalho Na Área De Trabalho
 
-Tambem e possivel recriar o atalho pela interface, no botao `Criar atalho na Area de Trabalho`.
+Na primeira configuração, o launcher pode criar um atalho `Coastdown MDA Launcher.lnk` na Área de Trabalho. O atalho aponta para `launcher.bat` e usa a pasta do launcher como diretório de trabalho.
 
-Se existir o arquivo `assets/coastdown_launcher.ico`, ele sera usado como icone do atalho. Se esse arquivo nao existir, o Windows usa o icone padrao do atalho.
+Também é possível recriar o atalho pela interface, no botão `Criar atalho na Área de Trabalho`.
 
-## Instalar/Reparar apps
+Se existir o arquivo `assets/coastdown_launcher.ico`, ele será usado como ícone do atalho. Se esse arquivo não existir, o Windows usa o ícone padrão do atalho.
 
-Cada app possui um botao `Instalar/Reparar`.
+## Instalar/Reparar Apps
 
-Quando a pasta local do app nao existe, o launcher pede confirmacao e clona o repositorio configurado com Git. Depois disso, prepara o ambiente virtual e instala as dependencias do `requirements.txt`.
+Cada app possui um botão `Instalar/Reparar`.
 
-Quando a pasta local ja existe, o launcher verifica se ela e um repositorio Git. Por seguranca, pastas existentes que nao tenham `.git` nao sao sobrescritas automaticamente; nesses casos, revise o caminho configurado ou escolha outra pasta.
+Quando a pasta local do app não existe, o launcher pede confirmação e clona o repositório configurado com Git. Depois disso, prepara o ambiente virtual e instala as dependências do `requirements.txt`.
 
-Para repositorios Git existentes, o launcher busca a branch configurada, troca para essa branch quando possivel, atualiza com `git pull --ff-only` e reinstala as dependencias.
+Quando a pasta local já existe, o launcher verifica se ela é um repositório Git. Por segurança, pastas existentes que não tenham `.git` não são sobrescritas automaticamente; nesses casos, revise o caminho configurado ou escolha outra pasta.
 
-## O que o launcher faz
+Para repositórios Git existentes, o launcher busca a branch configurada, troca para essa branch quando possível, atualiza com `git pull --ff-only` e reinstala as dependências.
 
-- Verifica atualizacoes com Git.
-- Atualiza repositorios locais com `git pull --ff-only`.
+## Status Nos Cards
+
+Cada card mostra o estado de instalação, ambiente virtual detectado, branch, porta, estado de atualização e resultado da última operação relevante.
+
+Os logs técnicos não ocupam mais a tela principal. O usuário deve acompanhar o resumo diretamente nos cards, por exemplo:
+
+```text
+Atualização: Atualizado
+Última ação: Software já está na versão mais recente.
+```
+
+ou:
+
+```text
+Atualização: Atualização disponível
+Última ação: Nova versão disponível para instalação.
+```
+
+Use os botões dos cards para verificar atualização, atualizar, instalar/reparar e abrir cada app.
+
+## O Que O Launcher Faz
+
+- Verifica atualizações com Git pelo botão `Verificar atualização`, comparando commits da branch configurada.
+- Atualiza repositórios locais com `git pull --ff-only`.
 - Instala ou repara apps com `git clone`, checkout da branch configurada e `git pull --ff-only`.
 - Detecta ambientes virtuais `venv` e `.venv`.
-- Cria `.venv` e instala `requirements.txt` com confirmacao do usuario quando necessario.
-- Valida se o Streamlit esta disponivel antes de abrir o app.
+- Cria `.venv` e instala `requirements.txt` com confirmação do usuário quando necessário.
+- Valida se o Streamlit está disponível antes de abrir o app.
 - Abre o app com `python -m streamlit run app.py --server.port <porta> --server.headless true` usando o Python do ambiente virtual do app.
-- Tenta abrir Microsoft Edge ou Google Chrome em modo app, sem abas e sem barra de endereco.
-- Usa o navegador padrao como fallback quando Edge/Chrome nao sao encontrados.
+- Tenta abrir Microsoft Edge ou Google Chrome em modo app maximizado, sem abas e sem barra de endereço.
+- Usa o navegador padrão como fallback quando Edge/Chrome não são encontrados.
 
-## Restricoes
+## Restrições
 
-- Nao gera executavel `.exe`.
-- Nao instala bibliotecas externas para o launcher.
-- Nao mistura codigo dos apps Standard e Split neste repositorio.
+- Não gera executável `.exe`.
+- Não instala bibliotecas externas para o launcher.
+- Não mistura código dos apps Standard e Split neste repositório.

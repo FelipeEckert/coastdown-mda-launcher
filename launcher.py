@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import json
 import os
 import queue
@@ -13,7 +15,7 @@ import webbrowser
 from pathlib import Path
 from tkinter import filedialog
 from tkinter import messagebox
-from tkinter import scrolledtext
+from tkinter import ttk
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -26,11 +28,24 @@ class CoastdownLauncher(tk.Tk):
         super().__init__()
 
         self.title("Coastdown MDA Launcher")
-        self.geometry("860x620")
-        self.minsize(760, 520)
+        self.geometry("1000x720")
+        self.minsize(900, 650)
+        try:
+            self.state("zoomed")
+        except tk.TclError:
+            pass
+        icon_path = BASE_DIR / "assets" / "coastdown_launcher.ico"
+        if icon_path.exists():
+            try:
+                self.iconbitmap(str(icon_path))
+            except tk.TclError:
+                pass
 
         self.log_queue = queue.Queue()
+        self.log_history = []
         self.buttons = []
+        self.app_status_vars = {}
+        self.update_status = {}
         self.git_executable = None
         self.startup_cancelled = False
 
@@ -39,6 +54,7 @@ class CoastdownLauncher(tk.Tk):
             self.destroy()
             return
 
+        self.configure_styles()
         self.configure_ui()
         self.after(100, self.flush_log_queue)
 
@@ -49,12 +65,12 @@ class CoastdownLauncher(tk.Tk):
 
         if not CONFIG_EXAMPLE_FILE.exists():
             messagebox.showerror(
-                "Configuracao nao encontrada",
+                "Configuração não encontrada",
                 "Nenhum arquivo config.json ou config.example.json foi encontrado.",
             )
             return {"apps": {}}, False
 
-        self.enqueue_log("Configuracao inicial necessaria.")
+        self.enqueue_log("Configuração inicial necessária.")
         example_config = self.read_config_file(CONFIG_EXAMPLE_FILE)
         config_data = self.create_initial_config(example_config)
         if config_data is None:
@@ -69,17 +85,17 @@ class CoastdownLauncher(tk.Tk):
                 return json.load(config_file)
         except (OSError, json.JSONDecodeError) as error:
             messagebox.showerror(
-                "Erro ao ler configuracao",
-                f"Nao foi possivel ler {config_path.name}:\n{error}",
+                "Erro ao ler configuração",
+                f"Não foi possível ler {config_path.name}:\n{error}",
             )
             return {"apps": {}}
 
     def create_initial_config(self, example_config):
         recommended_root = Path.home() / "CoastdownMDA"
         answer = messagebox.askyesnocancel(
-            "Configuracao inicial",
-            "O Coastdown MDA Launcher ainda nao foi configurado nesta maquina.\n\n"
-            "Escolha onde os aplicativos Coastdown serao instalados.\n"
+            "Configuração inicial",
+            "O Coastdown MDA Launcher ainda não foi configurado nesta máquina.\n\n"
+            "Escolha onde os aplicativos Coastdown serão instalados.\n"
             f"Local recomendado:\n{recommended_root}\n\n"
             "Deseja usar o local recomendado?",
             parent=self,
@@ -87,8 +103,8 @@ class CoastdownLauncher(tk.Tk):
 
         if answer is None:
             messagebox.showinfo(
-                "Configuracao cancelada",
-                "Configuracao inicial cancelada. O launcher sera encerrado.",
+                "Configuração cancelada",
+                "Configuração inicial cancelada. O launcher será encerrado.",
                 parent=self,
             )
             return None
@@ -103,8 +119,8 @@ class CoastdownLauncher(tk.Tk):
             )
             if not selected_path:
                 messagebox.showinfo(
-                    "Configuracao cancelada",
-                    "Nenhuma pasta foi escolhida. O launcher sera encerrado.",
+                    "Configuração cancelada",
+                    "Nenhuma pasta foi escolhida. O launcher será encerrado.",
                     parent=self,
                 )
                 return None
@@ -117,7 +133,7 @@ class CoastdownLauncher(tk.Tk):
         except OSError as error:
             messagebox.showerror(
                 "Erro ao criar pastas",
-                f"Nao foi possivel criar as pastas iniciais:\n{error}",
+                f"Não foi possível criar as pastas iniciais:\n{error}",
                 parent=self,
             )
             return None
@@ -137,8 +153,8 @@ class CoastdownLauncher(tk.Tk):
             return self.read_config_file(CONFIG_FILE)
         except OSError as error:
             messagebox.showerror(
-                "Erro ao criar configuracao",
-                f"Nao foi possivel criar config.json:\n{error}",
+                "Erro ao criar configuração",
+                f"Não foi possível criar config.json:\n{error}",
                 parent=self,
             )
             return None
@@ -147,7 +163,7 @@ class CoastdownLauncher(tk.Tk):
         self.enqueue_log("config.json criado com sucesso.")
         should_create_shortcut = messagebox.askyesno(
             "Criar atalho",
-            "Deseja criar um atalho do Coastdown MDA Launcher na Area de Trabalho?",
+            "Deseja criar um atalho do Coastdown MDA Launcher na Área de Trabalho?",
             parent=self,
         )
         if should_create_shortcut:
@@ -159,8 +175,8 @@ class CoastdownLauncher(tk.Tk):
         user_profile = Path(os.path.expandvars("%USERPROFILE%"))
         candidates = [
             user_profile / "Desktop",
-            user_profile / "Area de Trabalho",
             user_profile / "Área de Trabalho",
+            user_profile / "Area de Trabalho",
             Path.home() / "Desktop",
         ]
 
@@ -176,20 +192,20 @@ class CoastdownLauncher(tk.Tk):
         launcher_path = BASE_DIR / "launcher.bat"
         icon_path = BASE_DIR / "assets" / "coastdown_launcher.ico"
 
-        self.enqueue_log("Criando atalho na Area de Trabalho...")
-        self.enqueue_log(f"Area de Trabalho usada: {desktop_path}")
+        self.enqueue_log("Criando atalho na Área de Trabalho...")
+        self.enqueue_log(f"Área de Trabalho usada: {desktop_path}")
 
         if not launcher_path.exists():
-            self.enqueue_log(f"launcher.bat nao encontrado: {launcher_path}")
+            self.enqueue_log(f"launcher.bat não encontrado: {launcher_path}")
             return False
 
         if shortcut_path.exists():
             should_recreate = self.ask_yes_no(
                 "Atalho existente",
-                "O atalho ja existe. Deseja recria-lo?",
+                "O atalho já existe. Deseja recriá-lo?",
             )
             if not should_recreate:
-                self.enqueue_log("Criacao de atalho cancelada pelo usuario.")
+                self.enqueue_log("Criação de atalho cancelada pelo usuário.")
                 return False
 
         def powershell_quote(value):
@@ -215,10 +231,10 @@ class CoastdownLauncher(tk.Tk):
                 shell=False,
             )
         except OSError as error:
-            self.enqueue_log(f"Nao foi possivel criar o atalho: {error}")
+            self.enqueue_log(f"Não foi possível criar o atalho: {error}")
             self.show_warning(
-                "Atalho nao criado",
-                "Nao foi possivel criar o atalho. Verifique permissoes da Area de Trabalho.",
+                "Atalho não criado",
+                "Não foi possível criar o atalho. Verifique as permissões da Área de Trabalho.",
             )
             return False
 
@@ -228,152 +244,273 @@ class CoastdownLauncher(tk.Tk):
             if result.stderr:
                 self.enqueue_log(result.stderr.strip())
             self.enqueue_log(
-                "Nao foi possivel criar o atalho. Verifique permissoes da Area de Trabalho."
+                "Não foi possível criar o atalho. Verifique as permissões da Área de Trabalho."
             )
             self.show_warning(
-                "Atalho nao criado",
-                "Nao foi possivel criar o atalho. Verifique permissoes da Area de Trabalho.",
+                "Atalho não criado",
+                "Não foi possível criar o atalho. Verifique as permissões da Área de Trabalho.",
             )
             return False
 
         self.enqueue_log(f"Atalho criado: {shortcut_path}")
         return True
 
+    def configure_styles(self):
+        self.colors = {
+            "background": "#F4F6F8",
+            "card": "#FFFFFF",
+            "text": "#1F2933",
+            "secondary": "#52616B",
+            "blue": "#0F4C81",
+            "green": "#2E7D32",
+            "warning": "#B7791F",
+            "border": "#D9E2EC",
+        }
+        self.configure(bg=self.colors["background"])
+
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        style.configure(".", font=("Segoe UI", 10))
+        style.configure("App.TFrame", background=self.colors["background"])
+        style.configure("Header.TFrame", background=self.colors["background"])
+        style.configure(
+            "Card.TFrame",
+            background=self.colors["card"],
+            borderwidth=1,
+            relief="solid",
+        )
+        style.configure(
+            "Title.TLabel",
+            background=self.colors["background"],
+            foreground=self.colors["text"],
+            font=("Segoe UI", 22, "bold"),
+        )
+        style.configure(
+            "Subtitle.TLabel",
+            background=self.colors["background"],
+            foreground=self.colors["secondary"],
+            font=("Segoe UI", 10),
+        )
+        style.configure(
+            "CardTitle.TLabel",
+            background=self.colors["card"],
+            foreground=self.colors["text"],
+            font=("Segoe UI", 12, "bold"),
+        )
+        style.configure(
+            "Meta.TLabel",
+            background=self.colors["card"],
+            foreground=self.colors["secondary"],
+            font=("Segoe UI", 9),
+        )
+        style.configure(
+            "Status.TLabel",
+            background=self.colors["card"],
+            foreground=self.colors["text"],
+            font=("Segoe UI", 10),
+        )
+        style.configure(
+            "Path.TLabel",
+            background=self.colors["card"],
+            foreground=self.colors["secondary"],
+            font=("Segoe UI", 8),
+        )
+        style.configure("TButton", padding=(10, 6), font=("Segoe UI", 9))
+        style.configure(
+            "Primary.TButton",
+            background=self.colors["blue"],
+            foreground="#FFFFFF",
+            borderwidth=0,
+        )
+        style.map(
+            "Primary.TButton",
+            background=[("active", "#0B3D66"), ("disabled", "#A7BBCD")],
+            foreground=[("disabled", "#EFF4F8")],
+        )
+        style.configure(
+            "Shortcut.TButton",
+            background="#E7EEF5",
+            foreground=self.colors["blue"],
+            borderwidth=0,
+        )
+        style.map("Shortcut.TButton", background=[("active", "#D7E4EF")])
     def configure_ui(self):
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
+        self.rowconfigure(1, weight=1)
 
-        header = tk.Frame(self, padx=18, pady=16)
+        header = ttk.Frame(self, padding=(24, 20, 24, 14), style="Header.TFrame")
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
 
-        title = tk.Label(
+        title = ttk.Label(
             header,
             text="Coastdown MDA Launcher",
-            font=("Segoe UI", 20, "bold"),
+            style="Title.TLabel",
             anchor="w",
         )
         title.grid(row=0, column=0, sticky="ew")
 
-        subtitle = tk.Label(
+        subtitle = ttk.Label(
             header,
-            text="Atualize e abra os apps Streamlit Standard e Split.",
-            font=("Segoe UI", 10),
+            text="Gerenciador de instalação, atualização e abertura dos apps Coastdown MDA",
+            style="Subtitle.TLabel",
             anchor="w",
         )
         subtitle.grid(row=1, column=0, sticky="ew", pady=(4, 0))
 
-        apps_frame = tk.Frame(self, padx=18)
-        apps_frame.grid(row=1, column=0, sticky="ew")
+        apps_frame = ttk.Frame(self, padding=(24, 0, 24, 0), style="App.TFrame")
+        apps_frame.grid(row=1, column=0, sticky="nsew")
         apps_frame.columnconfigure(0, weight=1)
 
         apps = self.config_data.get("apps", {})
         if not apps:
-            self.log("Nenhuma aplicacao encontrada na configuracao.")
+            self.log("Nenhuma aplicação encontrada na configuração.")
 
         for row_index, app_key in enumerate(("standard", "split")):
             app_config = apps.get(app_key)
             if app_config:
                 self.create_app_block(apps_frame, row_index, app_key, app_config)
 
-        shortcut_button = tk.Button(
-            apps_frame,
-            text="Criar atalho na Area de Trabalho",
+        actions_frame = ttk.Frame(self, padding=(24, 0, 24, 10), style="App.TFrame")
+        actions_frame.grid(row=2, column=0, sticky="ew")
+        shortcut_button = ttk.Button(
+            actions_frame,
+            text="Criar atalho na Área de Trabalho",
             command=lambda: self.run_in_background(
-                "Criar atalho na Area de Trabalho",
+                "Criar atalho na Área de Trabalho",
                 self.create_desktop_shortcut,
             ),
-            width=30,
+            style="Shortcut.TButton",
         )
-        shortcut_button.grid(row=2, column=0, sticky="w", pady=(0, 4))
+        shortcut_button.grid(row=0, column=0, sticky="w")
         self.buttons.append(shortcut_button)
 
-        log_frame = tk.LabelFrame(self, text="Log", padx=10, pady=10)
-        log_frame.grid(row=2, column=0, sticky="nsew", padx=18, pady=18)
-        log_frame.columnconfigure(0, weight=1)
-        log_frame.rowconfigure(0, weight=1)
-
-        self.log_text = scrolledtext.ScrolledText(
-            log_frame,
-            height=12,
-            wrap=tk.WORD,
-            state="disabled",
-            font=("Consolas", 9),
-        )
-        self.log_text.grid(row=0, column=0, sticky="nsew")
-
     def create_app_block(self, parent, row_index, app_key, app_config):
-        block = tk.LabelFrame(parent, text=app_config.get("name", app_key), padx=12, pady=10)
-        block.grid(row=row_index, column=0, sticky="ew", pady=(0, 12))
-        block.columnconfigure(1, weight=1)
+        block = ttk.Frame(parent, padding=(16, 14, 16, 14), style="Card.TFrame")
+        block.grid(row=row_index, column=0, sticky="ew", pady=(0, 14))
+        block.columnconfigure(0, weight=1)
 
-        name_label = tk.Label(
+        name_label = ttk.Label(
             block,
             text=app_config.get("name", app_key),
-            font=("Segoe UI", 11, "bold"),
+            style="CardTitle.TLabel",
             anchor="w",
         )
-        name_label.grid(row=0, column=0, columnspan=4, sticky="ew")
+        name_label.grid(row=0, column=0, sticky="ew")
 
-        configured_path = app_config.get("local_path", "")
-        expanded_path = os.path.expandvars(configured_path)
-        path_label = tk.Label(
+        status_var = tk.StringVar()
+        meta_var = tk.StringVar()
+        update_var = tk.StringVar()
+        action_var = tk.StringVar()
+        path_var = tk.StringVar()
+        self.app_status_vars[app_key] = {
+            "status": status_var,
+            "meta": meta_var,
+            "update": update_var,
+            "action": action_var,
+            "path": path_var,
+        }
+
+        status_label = ttk.Label(
             block,
-            text=f"Caminho: {expanded_path}",
+            textvariable=status_var,
+            style="Status.TLabel",
+            anchor="w",
+        )
+        status_label.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+
+        meta_label = ttk.Label(
+            block,
+            textvariable=meta_var,
+            style="Meta.TLabel",
+            anchor="w",
+        )
+        meta_label.grid(row=2, column=0, sticky="ew", pady=(3, 0))
+
+        update_label = tk.Label(
+            block,
+            textvariable=update_var,
+            bg=self.colors["card"],
+            fg=self.colors["secondary"],
+            font=("Segoe UI", 10, "bold"),
+            anchor="w",
+        )
+        update_label.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        self.app_status_vars[app_key]["update_widget"] = update_label
+
+        action_label = ttk.Label(
+            block,
+            textvariable=action_var,
+            style="Meta.TLabel",
+            anchor="w",
+        )
+        action_label.grid(row=4, column=0, sticky="ew", pady=(3, 0))
+
+        path_label = ttk.Label(
+            block,
+            textvariable=path_var,
+            style="Path.TLabel",
             anchor="w",
             justify="left",
         )
-        path_label.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(4, 10))
+        path_label.grid(row=5, column=0, sticky="ew", pady=(6, 10))
 
-        check_button = tk.Button(
-            block,
-            text="Verificar atualizacao",
+        buttons_frame = ttk.Frame(block, style="Card.TFrame")
+        buttons_frame.grid(row=6, column=0, sticky="w")
+
+        check_button = ttk.Button(
+            buttons_frame,
+            text="Verificar atualização",
             command=lambda: self.run_in_background(
-                f"Verificar atualizacao - {app_config.get('name', app_key)}",
+                f"Verificar atualização - {app_config.get('name', app_key)}",
                 self.check_update,
                 app_config,
             ),
-            width=22,
         )
-        check_button.grid(row=2, column=0, sticky="w", padx=(0, 8))
+        check_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
 
-        update_button = tk.Button(
-            block,
+        update_button = ttk.Button(
+            buttons_frame,
             text="Atualizar",
             command=lambda: self.run_in_background(
                 f"Atualizar - {app_config.get('name', app_key)}",
                 self.update_app,
                 app_config,
             ),
-            width=18,
         )
-        update_button.grid(row=2, column=1, sticky="w", padx=(0, 8))
+        update_button.grid(row=0, column=1, sticky="w", padx=(0, 8))
 
-        install_button = tk.Button(
-            block,
+        install_button = ttk.Button(
+            buttons_frame,
             text="Instalar/Reparar",
             command=lambda: self.run_in_background(
                 f"Instalar/Reparar - {app_config.get('name', app_key)}",
                 self.install_or_repair_app,
                 app_config,
             ),
-            width=18,
+            style="Primary.TButton",
         )
-        install_button.grid(row=2, column=2, sticky="w", padx=(0, 8))
+        install_button.grid(row=0, column=2, sticky="w", padx=(0, 8))
 
-        open_button = tk.Button(
-            block,
+        open_button = ttk.Button(
+            buttons_frame,
             text="Abrir",
             command=lambda: self.run_in_background(
                 f"Abrir - {app_config.get('name', app_key)}",
                 self.open_app,
                 app_config,
             ),
-            width=18,
+            style="Primary.TButton",
         )
-        open_button.grid(row=2, column=3, sticky="w")
+        open_button.grid(row=0, column=3, sticky="w")
 
         self.buttons.extend([check_button, update_button, install_button, open_button])
+        self.refresh_app_status(app_key)
+        self.initialize_app_update_status(app_key)
 
     def run_in_background(self, title, target, app_config=None):
         thread = threading.Thread(
@@ -396,10 +533,17 @@ class CoastdownLauncher(tk.Tk):
         except Exception as error:
             self.enqueue_log(f"Erro inesperado: {error}")
         finally:
+            self.refresh_status_cards()
             self.set_buttons_state("normal")
 
     def set_buttons_state(self, state):
         self.log_queue.put(("buttons", state))
+
+    def refresh_status_cards(self):
+        self.log_queue.put(("refresh_status", None))
+
+    def set_app_update_status(self, app_key: str, state: str, message: str) -> None:
+        self.log_queue.put(("update_status", app_key, state, message))
 
     def flush_log_queue(self):
         while True:
@@ -411,34 +555,147 @@ class CoastdownLauncher(tk.Tk):
             if isinstance(item, tuple) and item[0] == "buttons":
                 for button in self.buttons:
                     button.configure(state=item[1])
+            elif isinstance(item, tuple) and item[0] == "refresh_status":
+                self.refresh_all_app_statuses()
+            elif isinstance(item, tuple) and item[0] == "update_status":
+                _, app_key, state, message = item
+                self.apply_app_update_status(app_key, state, message)
             else:
                 self.write_log(str(item))
 
         self.after(100, self.flush_log_queue)
 
     def log(self, message):
-        if hasattr(self, "log_text"):
-            self.write_log(message)
-        else:
-            self.enqueue_log(message)
+        self.enqueue_log(message)
 
     def enqueue_log(self, message):
         self.log_queue.put(message)
 
     def write_log(self, message):
-        self.log_text.configure(state="normal")
-        self.log_text.insert(tk.END, message + "\n")
-        self.log_text.see(tk.END)
-        self.log_text.configure(state="disabled")
+        self.log_history.append(message)
+        print(message)
+
+    def get_venv_status(self, app_path: Path, app_config: dict) -> tuple[Path | None, str | None]:
+        venv_names = app_config.get("venv_names")
+        if not venv_names:
+            venv_names = [".venv", "venv"]
+
+        for venv_name in venv_names:
+            venv_python = app_path / venv_name / "Scripts" / "python.exe"
+            if venv_python.exists():
+                return venv_python, venv_name
+
+        return None, None
+
+    def get_app_status(self, app_key: str) -> dict:
+        app_config = self.config_data.get("apps", {}).get(app_key, {})
+        app_path = self.get_app_path(app_config)
+        installed = app_path.exists()
+        git_repo = (app_path / ".git").exists()
+        _, venv_name = self.get_venv_status(app_path, app_config)
+
+        if installed and git_repo:
+            status = "instalado"
+        elif installed:
+            status = "pasta sem Git"
+        else:
+            status = "não instalado"
+
+        return {
+            "name": app_config.get("name", app_key),
+            "status": status,
+            "environment": venv_name or "pendente",
+            "branch": app_config.get("branch", "release"),
+            "port": self.get_app_port(app_config),
+            "path": app_path,
+        }
+
+    def refresh_app_status(self, app_key):
+        status_vars = self.app_status_vars.get(app_key)
+        if not status_vars:
+            return
+
+        status = self.get_app_status(app_key)
+        status_vars["status"].set(
+            f"Status: {status['status']} | Ambiente: {status['environment']}"
+        )
+        status_vars["meta"].set(
+            f"Branch: {status['branch']} | Porta: {status['port']}"
+        )
+        status_vars["path"].set(f"Caminho: {status['path']}")
+
+    def refresh_all_app_statuses(self):
+        for app_key in self.app_status_vars:
+            self.refresh_app_status(app_key)
+
+    def get_update_status_display(self, state: str) -> tuple[str, str]:
+        status_map = {
+            "not_checked": ("Não verificado", self.colors["secondary"]),
+            "up_to_date": ("Atualizado", self.colors["green"]),
+            "update_available": ("Atualização disponível", self.colors["warning"]),
+            "updated_success": ("Atualizado com sucesso", self.colors["green"]),
+            "install_success": ("Instalação concluída", self.colors["green"]),
+            "repair_success": ("Reparo concluído", self.colors["green"]),
+            "not_installed": ("Não instalado", self.colors["secondary"]),
+            "check_error": ("Erro ao verificar", "#C62828"),
+            "update_error": ("Erro ao atualizar", "#C62828"),
+            "install_repair_error": ("Erro ao instalar/reparar", "#C62828"),
+        }
+        return status_map.get(state, ("Não verificado", self.colors["secondary"]))
+
+    def apply_app_update_status(self, app_key: str, state: str, message: str):
+        self.update_status[app_key] = {
+            "state": state,
+            "message": message,
+        }
+        status_vars = self.app_status_vars.get(app_key)
+        if not status_vars:
+            return
+
+        label, color = self.get_update_status_display(state)
+        update_widget = status_vars.get("update_widget")
+        if update_widget is not None:
+            update_widget.configure(fg=color)
+        status_vars["update"].set(f"Atualização: {label}")
+        status_vars["action"].set(f"Última ação: {message}")
+
+    def initialize_app_update_status(self, app_key: str):
+        status = self.get_app_status(app_key)
+        if status["status"] == "não instalado":
+            self.apply_app_update_status(
+                app_key,
+                "not_installed",
+                "Aplicação ainda não instalada nesta máquina.",
+            )
+            return
+
+        self.apply_app_update_status(
+            app_key,
+            "not_checked",
+            "Atualização ainda não verificada.",
+        )
 
     def get_app_path(self, app_config):
         return Path(os.path.expandvars(app_config.get("local_path", "")))
+
+    def get_app_key(self, app_config):
+        apps = self.config_data.get("apps", {})
+        for app_key, configured_app in apps.items():
+            if configured_app is app_config:
+                return app_key
+
+        app_name = app_config.get("name")
+        for app_key, configured_app in apps.items():
+            if configured_app.get("name") == app_name:
+                return app_key
+
+        return None
 
     def get_app_port(self, app_config):
         try:
             return int(app_config.get("port", 8501))
         except (TypeError, ValueError):
-            self.enqueue_log("Porta invalida na configuracao. Usando porta padrao 8501.")
+            self.enqueue_log("Porta inválida na configuração. Usando porta padrão 8501.")
             return 8501
 
     def find_git_executable(self) -> str | None:
@@ -467,22 +724,22 @@ class CoastdownLauncher(tk.Tk):
             self.enqueue_log(f"Git encontrado: {git_path}")
             return True
 
-        self.enqueue_log("Git nao encontrado.")
+        self.enqueue_log("Git não encontrado.")
         should_install = self.ask_yes_no(
-            "Git nao encontrado",
-            "Git nao foi encontrado nesta maquina.\n\n"
-            "O launcher precisa do Git para verificar atualizacoes, atualizar "
+            "Git não encontrado",
+            "Git não foi encontrado nesta máquina.\n\n"
+            "O launcher precisa do Git para verificar atualizações, atualizar "
             "e instalar os apps.\n\n"
             "Deseja tentar instalar o Git automaticamente usando winget?",
         )
         if not should_install:
-            self.enqueue_log("Instalacao do Git cancelada pelo usuario.")
+            self.enqueue_log("Instalação do Git cancelada pelo usuário.")
             return False
 
         winget_path = shutil.which("winget")
         if not winget_path:
             self.enqueue_log(
-                "Instalacao automatica do Git nao foi possivel. Solicite apoio ao TI."
+                "Instalação automática do Git não foi possível. Solicite apoio ao TI."
             )
             return False
 
@@ -492,12 +749,12 @@ class CoastdownLauncher(tk.Tk):
             BASE_DIR,
         )
         self.enqueue_log(
-            "Talvez seja necessario fechar e abrir novamente o launcher para o PATH ser atualizado."
+            "Talvez seja necessário fechar e abrir novamente o launcher para o PATH ser atualizado."
         )
 
         if install_code != 0:
             self.enqueue_log(
-                "Instalacao automatica do Git nao foi possivel. Solicite apoio ao TI."
+                "Instalação automática do Git não foi possível. Solicite apoio ao TI."
             )
             return False
 
@@ -508,7 +765,7 @@ class CoastdownLauncher(tk.Tk):
             return True
 
         self.enqueue_log(
-            "Git instalado, mas ainda nao foi possivel confirmar o comando nesta sessao."
+            "Git instalado, mas ainda não foi possível confirmar o comando nesta sessão."
         )
         return False
 
@@ -546,17 +803,12 @@ class CoastdownLauncher(tk.Tk):
         done.wait()
 
     def find_venv_python(self, app_path: Path, app_config: dict) -> Path | None:
-        venv_names = app_config.get("venv_names")
-        if not venv_names:
-            venv_names = [".venv", "venv"]
+        venv_python, venv_name = self.get_venv_status(app_path, app_config)
+        if venv_python is not None:
+            self.enqueue_log(f"Ambiente virtual encontrado: {venv_name}")
+            return venv_python
 
-        for venv_name in venv_names:
-            venv_python = app_path / venv_name / "Scripts" / "python.exe"
-            if venv_python.exists():
-                self.enqueue_log(f"Ambiente virtual encontrado: {venv_name}")
-                return venv_python
-
-        self.enqueue_log("Ambiente virtual nao encontrado.")
+        self.enqueue_log("Ambiente virtual não encontrado.")
         return None
 
     def create_venv(self, app_path: Path) -> Path | None:
@@ -573,7 +825,7 @@ class CoastdownLauncher(tk.Tk):
             return None
 
         if not venv_python.exists():
-            self.enqueue_log(f"Erro: Python do ambiente virtual nao encontrado: {venv_python}")
+            self.enqueue_log(f"Erro: Python do ambiente virtual não encontrado: {venv_python}")
             return None
 
         self.enqueue_log("Ambiente virtual criado: .venv")
@@ -596,20 +848,20 @@ class CoastdownLauncher(tk.Tk):
 
         if not requirements.exists():
             self.enqueue_log(
-                "requirements.txt nao encontrado. Pulando instalacao de dependencias."
+                "requirements.txt não encontrado. Pulando instalação de dependências."
             )
             return True
 
-        self.enqueue_log("Instalando dependencias do requirements.txt...")
+        self.enqueue_log("Instalando dependências do requirements.txt...")
         return_code, _ = self.run_command(
             [str(venv_python), "-m", "pip", "install", "-r", "requirements.txt"],
             app_path,
         )
         if return_code != 0:
-            self.enqueue_log("Falha ao instalar dependencias.")
+            self.enqueue_log("Falha ao instalar dependências.")
             return False
 
-        self.enqueue_log("Dependencias instaladas com sucesso.")
+        self.enqueue_log("Dependências instaladas com sucesso.")
         return True
 
     def has_streamlit(self, venv_python: Path) -> bool:
@@ -634,7 +886,7 @@ class CoastdownLauncher(tk.Tk):
                 time.sleep(0.5)
 
         self.enqueue_log(
-            f"Aviso: {url} nao respondeu em {timeout_seconds} segundos. Abrindo mesmo assim."
+            f"Aviso: {url} não respondeu em {timeout_seconds} segundos. Abrindo mesmo assim."
         )
         return False
 
@@ -662,7 +914,7 @@ class CoastdownLauncher(tk.Tk):
         if edge_path is not None:
             self.enqueue_log("Abrindo em modo app: Microsoft Edge")
             try:
-                subprocess.Popen([str(edge_path), f"--app={url}"])
+                subprocess.Popen([str(edge_path), f"--app={url}", "--start-maximized"])
                 return
             except OSError as error:
                 self.enqueue_log(f"Falha ao abrir Microsoft Edge: {error}")
@@ -671,12 +923,12 @@ class CoastdownLauncher(tk.Tk):
         if chrome_path is not None:
             self.enqueue_log("Abrindo em modo app: Google Chrome")
             try:
-                subprocess.Popen([str(chrome_path), f"--app={url}"])
+                subprocess.Popen([str(chrome_path), f"--app={url}", "--start-maximized"])
                 return
             except OSError as error:
                 self.enqueue_log(f"Falha ao abrir Google Chrome: {error}")
 
-        self.enqueue_log("Edge/Chrome nao encontrado. Abrindo no navegador padrao.")
+        self.enqueue_log("Edge/Chrome não encontrado. Abrindo no navegador padrão.")
         webbrowser.open(url)
 
     def prepare_app_environment(
@@ -688,12 +940,12 @@ class CoastdownLauncher(tk.Tk):
         app_name = app_config.get("name", "sem nome")
         if ask_confirmation:
             should_prepare = self.ask_yes_no(
-                "Ambiente virtual nao encontrado",
-                f"Ambiente virtual nao encontrado para {app_name}.\n\n"
-                "Deseja preparar esta aplicacao agora?",
+                "Ambiente virtual não encontrado",
+                f"Ambiente virtual não encontrado para {app_name}.\n\n"
+                "Deseja preparar esta aplicação agora?",
             )
             if not should_prepare:
-                self.enqueue_log("Preparo do ambiente virtual cancelado pelo usuario.")
+                self.enqueue_log("Preparo do ambiente virtual cancelado pelo usuário.")
                 return None
 
         venv_python = self.create_venv(app_path)
@@ -731,7 +983,7 @@ class CoastdownLauncher(tk.Tk):
         if checkout_code == 0:
             return True
 
-        self.enqueue_log(f"Branch local {branch} nao encontrada. Criando a partir da remota.")
+        self.enqueue_log(f"Branch local {branch} não encontrada. Criando a partir da remota.")
         checkout_new_code, _ = self.run_command(
             [git_command, "checkout", "-b", branch, f"origin/{branch}"],
             app_path,
@@ -743,34 +995,60 @@ class CoastdownLauncher(tk.Tk):
         app_name = app_config.get("name", "sem nome")
         repo_url = app_config.get("repo_url", "")
         branch = app_config.get("branch", "release")
+        app_key = self.get_app_key(app_config)
+        was_installed = app_path.exists()
 
-        self.enqueue_log(f"Aplicacao: {app_name}")
+        self.enqueue_log(f"Aplicação: {app_name}")
         self.enqueue_log(f"Caminho local: {app_path}")
 
         if not repo_url:
-            self.enqueue_log("URL do repositorio nao configurada.")
+            self.enqueue_log("URL do repositório não configurada.")
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "install_repair_error",
+                    "Não foi possível preparar a aplicação.",
+                )
             return False
 
         if not self.ensure_git_available():
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "install_repair_error",
+                    "Não foi possível preparar a aplicação.",
+                )
             return False
 
         git_command = self.git_executable or "git"
 
         if not app_path.exists():
-            self.enqueue_log("Aplicacao nao encontrada localmente.")
+            self.enqueue_log("Aplicação não encontrada localmente.")
             should_install = self.ask_yes_no(
-                "Aplicacao nao instalada",
-                f"A aplicacao {app_name} ainda nao esta instalada nesta maquina.\n\n"
+                "Aplicação não instalada",
+                f"A aplicação {app_name} ainda não está instalada nesta máquina.\n\n"
                 "Deseja instalar agora?",
             )
             if not should_install:
-                self.enqueue_log("Instalacao cancelada pelo usuario.")
+                self.enqueue_log("Instalação cancelada pelo usuário.")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "not_installed",
+                        "Aplicação ainda não instalada nesta máquina.",
+                    )
                 return False
 
             try:
                 app_path.parent.mkdir(parents=True, exist_ok=True)
             except OSError as error:
-                self.enqueue_log(f"Nao foi possivel criar a pasta pai: {error}")
+                self.enqueue_log(f"Não foi possível criar a pasta pai: {error}")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "install_repair_error",
+                        "Não foi possível preparar a aplicação.",
+                    )
                 return False
 
             self.enqueue_log(f"Clonando {repo_url}...")
@@ -780,68 +1058,136 @@ class CoastdownLauncher(tk.Tk):
             )
             if clone_code != 0:
                 self.enqueue_log("Clone falhou.")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "install_repair_error",
+                        "Não foi possível preparar a aplicação.",
+                    )
                 return False
 
-            self.enqueue_log("Clone concluido.")
+            self.enqueue_log("Clone concluído.")
         else:
             self.enqueue_log("Pasta local encontrada.")
             if not (app_path / ".git").exists():
                 message = (
-                    "A pasta da aplicacao ja existe, mas nao parece ser um repositorio Git.\n\n"
-                    "Por seguranca, o launcher nao ira sobrescrever esta pasta.\n"
+                    "A pasta da aplicação já existe, mas não parece ser um repositório Git.\n\n"
+                    "Por segurança, o launcher não irá sobrescrever esta pasta.\n"
                     "Verifique o caminho configurado ou escolha outra pasta."
                 )
                 self.enqueue_log(message)
                 self.show_warning("Pasta existente sem Git", message)
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "install_repair_error",
+                        "Não foi possível preparar a aplicação.",
+                    )
                 return False
 
-            self.enqueue_log("Repositorio Git detectado.")
+            self.enqueue_log("Repositório Git detectado.")
             self.enqueue_log(f"Buscando branch remota {branch}...")
             fetch_code, _ = self.run_command([git_command, "fetch", "origin", branch], app_path)
             if fetch_code != 0:
-                self.enqueue_log("Nao foi possivel buscar a branch remota.")
+                self.enqueue_log("Não foi possível buscar a branch remota.")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "install_repair_error",
+                        "Não foi possível preparar a aplicação.",
+                    )
                 return False
 
             if not self.checkout_configured_branch(app_path, branch):
-                self.enqueue_log("Nao foi possivel trocar para a branch configurada.")
+                self.enqueue_log("Não foi possível trocar para a branch configurada.")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "install_repair_error",
+                        "Não foi possível preparar a aplicação.",
+                    )
                 return False
 
-            self.enqueue_log("Atualizando codigo...")
+            self.enqueue_log("Atualizando código...")
             pull_code, _ = self.run_command(
                 [git_command, "pull", "--ff-only", "origin", branch],
                 app_path,
             )
             if pull_code != 0:
-                self.enqueue_log("Atualizacao via Git falhou.")
+                self.enqueue_log("Atualização via Git falhou.")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "install_repair_error",
+                        "Não foi possível preparar a aplicação.",
+                    )
                 return False
 
         if not self.prepare_existing_environment(app_path, app_config):
-            self.enqueue_log("Nao foi possivel preparar a aplicacao.")
+            self.enqueue_log("Não foi possível preparar a aplicação.")
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "install_repair_error",
+                    "Não foi possível preparar a aplicação.",
+                )
             return False
 
-        self.enqueue_log("Aplicacao preparada com sucesso.")
+        self.enqueue_log("Aplicação preparada com sucesso.")
+        if app_key:
+            if was_installed:
+                self.set_app_update_status(
+                    app_key,
+                    "repair_success",
+                    "Aplicação verificada e preparada com sucesso.",
+                )
+            else:
+                self.set_app_update_status(
+                    app_key,
+                    "install_success",
+                    "Aplicação instalada e preparada com sucesso.",
+                )
         return True
 
     def check_update(self, app_config):
         app_path = self.get_app_path(app_config)
         branch = app_config.get("branch", "release")
+        app_key = self.get_app_key(app_config)
 
-        self.enqueue_log(f"Aplicacao: {app_config.get('name', 'sem nome')}")
+        self.enqueue_log(f"Aplicação: {app_config.get('name', 'sem nome')}")
         self.enqueue_log(f"Caminho local: {app_path}")
 
         if not app_path.exists():
-            self.enqueue_log("Repositorio ainda nao existe nesta maquina.")
-            self.enqueue_log("Clone automatico sera implementado em etapa futura.")
+            self.enqueue_log("Repositório ainda não existe nesta máquina.")
+            self.enqueue_log("Clone automático será implementado em etapa futura.")
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "not_installed",
+                    "Aplicação ainda não instalada nesta máquina.",
+                )
             return
 
         if not self.ensure_git_available():
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "check_error",
+                    "Não foi possível verificar atualizações.",
+                )
             return
 
         git_command = self.git_executable or "git"
 
         fetch_code, _ = self.run_command([git_command, "fetch", "origin", branch], app_path)
         if fetch_code != 0:
-            self.enqueue_log("Nao foi possivel verificar atualizacao.")
+            self.enqueue_log("Não foi possível verificar atualização.")
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "check_error",
+                    "Não foi possível verificar atualizações.",
+                )
             return
 
         local_code, local_commit = self.run_command([git_command, "rev-parse", "HEAD"], app_path)
@@ -851,7 +1197,13 @@ class CoastdownLauncher(tk.Tk):
         )
 
         if local_code != 0 or remote_code != 0:
-            self.enqueue_log("Nao foi possivel comparar os commits.")
+            self.enqueue_log("Não foi possível comparar os commits.")
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "check_error",
+                    "Não foi possível verificar atualizações.",
+                )
             return
 
         local_short = local_commit.strip()[:8]
@@ -860,99 +1212,219 @@ class CoastdownLauncher(tk.Tk):
         self.enqueue_log(f"Commit remoto: {remote_short}")
 
         if local_short == remote_short:
-            self.enqueue_log("Status: aplicacao atualizada")
+            self.enqueue_log("Status: aplicação atualizada")
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "up_to_date",
+                    "Software já está na versão mais recente.",
+                )
         else:
-            self.enqueue_log("Status: atualizacao disponivel")
+            self.enqueue_log("Status: atualização disponível")
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "update_available",
+                    "Nova versão disponível para instalação.",
+                )
 
     def update_app(self, app_config):
         app_path = self.get_app_path(app_config)
         branch = app_config.get("branch", "release")
+        app_key = self.get_app_key(app_config)
 
-        self.enqueue_log(f"Aplicacao: {app_config.get('name', 'sem nome')}")
+        self.enqueue_log(f"Aplicação: {app_config.get('name', 'sem nome')}")
         self.enqueue_log(f"Caminho local: {app_path}")
 
         if not app_path.exists():
             should_install = self.ask_yes_no(
-                "Aplicacao nao instalada",
-                "Aplicacao nao instalada.\n\nDeseja instalar agora?",
+                "Aplicação não instalada",
+                "Aplicação não instalada.\n\nDeseja instalar agora?",
             )
             if not should_install:
-                self.enqueue_log("Aplicacao nao instalada. Use Instalar/Reparar.")
+                self.enqueue_log("Aplicação não instalada. Use Instalar/Reparar.")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "not_installed",
+                        "Aplicação ainda não instalada nesta máquina.",
+                    )
                 return
 
             if not self.install_or_repair_app(app_config):
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "update_error",
+                        "Não foi possível concluir a atualização.",
+                    )
                 return
             return
 
         if not self.ensure_git_available():
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "update_error",
+                    "Não foi possível concluir a atualização.",
+                )
             return
 
         git_command = self.git_executable or "git"
 
-        pull_code, _ = self.run_command(
+        pull_code, pull_output = self.run_command(
             [git_command, "pull", "--ff-only", "origin", branch],
             app_path,
         )
         if pull_code != 0:
-            self.enqueue_log("Atualizacao via Git falhou.")
+            self.enqueue_log("Atualização via Git falhou.")
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "update_error",
+                    "Não foi possível concluir a atualização.",
+                )
             return
 
         venv_python = self.find_venv_python(app_path, app_config)
         if venv_python is None:
             venv_python = self.prepare_app_environment(app_path, app_config)
             if venv_python is None:
-                self.enqueue_log("Codigo atualizado, mas ambiente virtual nao preparado.")
+                self.enqueue_log("Código atualizado, mas ambiente virtual não preparado.")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "update_error",
+                        "Não foi possível concluir a atualização.",
+                    )
                 return
+            if app_key:
+                if "Already up to date." in pull_output:
+                    self.set_app_update_status(
+                        app_key,
+                        "up_to_date",
+                        "Software já estava atualizado.",
+                    )
+                else:
+                    self.set_app_update_status(
+                        app_key,
+                        "updated_success",
+                        "Atualização instalada com sucesso.",
+                    )
             return
 
-        self.install_requirements(app_path, venv_python)
+        if not self.install_requirements(app_path, venv_python):
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "update_error",
+                    "Não foi possível concluir a atualização.",
+                )
+            return
+
+        if app_key:
+            if "Already up to date." in pull_output:
+                self.set_app_update_status(
+                    app_key,
+                    "up_to_date",
+                    "Software já estava atualizado.",
+                )
+            else:
+                self.set_app_update_status(
+                    app_key,
+                    "updated_success",
+                    "Atualização instalada com sucesso.",
+                )
 
     def open_app(self, app_config):
         app_path = self.get_app_path(app_config)
         entrypoint = app_config.get("entrypoint", "app.py")
+        app_key = self.get_app_key(app_config)
 
-        self.enqueue_log(f"Aplicacao: {app_config.get('name', 'sem nome')}")
+        self.enqueue_log(f"Aplicação: {app_config.get('name', 'sem nome')}")
         self.enqueue_log(f"Caminho local: {app_path}")
 
         if not app_path.exists():
             should_install = self.ask_yes_no(
-                "Aplicacao nao instalada",
-                "Aplicacao nao instalada.\n\nDeseja instalar agora?",
+                "Aplicação não instalada",
+                "Aplicação não instalada.\n\nDeseja instalar agora?",
             )
             if not should_install:
-                self.enqueue_log("Abertura cancelada porque a aplicacao nao esta instalada.")
+                self.enqueue_log("Abertura cancelada porque a aplicação não está instalada.")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "not_installed",
+                        "Aplicação ainda não instalada nesta máquina.",
+                    )
                 return
 
             if not self.install_or_repair_app(app_config):
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "install_repair_error",
+                        "Não foi possível preparar a aplicação.",
+                    )
                 return
 
         venv_python = self.find_venv_python(app_path, app_config)
         if venv_python is None:
             venv_python = self.prepare_app_environment(app_path, app_config)
             if venv_python is None:
-                self.enqueue_log("Abertura cancelada porque o ambiente nao foi preparado.")
+                self.enqueue_log("Abertura cancelada porque o ambiente não foi preparado.")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "install_repair_error",
+                        "Não foi possível preparar a aplicação.",
+                    )
                 return
 
         entrypoint_path = app_path / entrypoint
         if not entrypoint_path.exists():
-            self.enqueue_log(f"Arquivo de entrada nao encontrado: {entrypoint_path}")
+            self.enqueue_log(f"Arquivo de entrada não encontrado: {entrypoint_path}")
+            if app_key:
+                self.set_app_update_status(
+                    app_key,
+                    "install_repair_error",
+                    "Não foi possível preparar a aplicação.",
+                )
             return
 
         if not self.has_streamlit(venv_python):
             should_install = self.ask_yes_no(
-                "Dependencias nao encontradas",
-                "O Streamlit ou alguma dependencia necessaria nao foi encontrada.\n\n"
-                "Deseja instalar as dependencias agora?",
+                "Dependências não encontradas",
+                "O Streamlit ou alguma dependência necessária não foi encontrada.\n\n"
+                "Deseja instalar as dependências agora?",
             )
             if not should_install:
-                self.enqueue_log("Abertura cancelada porque as dependencias nao foram instaladas.")
+                self.enqueue_log("Abertura cancelada porque as dependências não foram instaladas.")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "install_repair_error",
+                        "Não foi possível preparar a aplicação.",
+                    )
                 return
 
             if not self.install_requirements(app_path, venv_python):
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "install_repair_error",
+                        "Não foi possível preparar a aplicação.",
+                    )
                 return
 
             if not self.has_streamlit(venv_python):
-                self.enqueue_log("Streamlit ainda nao foi encontrado apos instalar dependencias.")
+                self.enqueue_log("Streamlit ainda não foi encontrado após instalar dependências.")
+                if app_key:
+                    self.set_app_update_status(
+                        app_key,
+                        "install_repair_error",
+                        "Não foi possível preparar a aplicação.",
+                    )
                 return
 
         port = self.get_app_port(app_config)
@@ -983,10 +1455,10 @@ class CoastdownLauncher(tk.Tk):
                 errors="replace",
             )
         except OSError as error:
-            self.enqueue_log(f"Erro ao abrir aplicacao: {error}")
+            self.enqueue_log(f"Erro ao abrir aplicação: {error}")
             return
 
-        self.enqueue_log("Aplicacao iniciada em segundo plano.")
+        self.enqueue_log("Aplicação iniciada em segundo plano.")
         output_thread = threading.Thread(
             target=self.read_process_output,
             args=(process,),
@@ -1002,23 +1474,23 @@ class CoastdownLauncher(tk.Tk):
             "executionpolicy",
             "running scripts is disabled",
             "activate.ps1",
-            "nao pode ser carregado",
             "não pode ser carregado",
-            "execucao de scripts foi desabilitada",
+            "não pode ser carregado",
+            "execução de scripts foi desabilitada",
             "execução de scripts foi desabilitada",
         ]
         return any(indicator in lower_text for indicator in indicators)
 
     def log_execution_policy_help(self):
         self.enqueue_log(
-            "Foi detectado um erro relacionado a politica de execucao do PowerShell."
+            "Foi detectado um erro relacionado à política de execução do PowerShell."
         )
         self.enqueue_log(
-            "O launcher nao precisa ativar o ambiente virtual manualmente."
+            "O launcher não precisa ativar o ambiente virtual manualmente."
         )
-        self.enqueue_log("Tente abrir o app novamente pelo botao Abrir.")
+        self.enqueue_log("Tente abrir o app novamente pelo botão Abrir.")
         self.enqueue_log(
-            "Se o problema persistir, envie este log ao suporte tecnico."
+            "Se o problema persistir, envie este log ao suporte técnico."
         )
 
     def read_process_output(self, process):
@@ -1033,7 +1505,7 @@ class CoastdownLauncher(tk.Tk):
                 execution_policy_detected = True
 
         return_code = process.wait()
-        self.enqueue_log(f"Processo encerrado com codigo {return_code}.")
+        self.enqueue_log(f"Processo encerrado com código {return_code}.")
         if return_code != 0 and execution_policy_detected:
             self.log_execution_policy_help()
 
@@ -1064,7 +1536,7 @@ class CoastdownLauncher(tk.Tk):
 
         return_code = process.wait()
         if return_code != 0:
-            self.enqueue_log(f"Comando terminou com codigo {return_code}.")
+            self.enqueue_log(f"Comando terminou com código {return_code}.")
             if self.is_execution_policy_error("\n".join(output_lines)):
                 self.log_execution_policy_help()
 
